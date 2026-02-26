@@ -225,3 +225,7 @@ getnotes_export/
 - 已下载的附件不会重复下载（自动跳过）
 - 默认下载前 100 条用于调试，确认无误后使用 `--all` 下载全部
 - 知识库下载按知识库名称创建子目录，统一保存在 `notebooks/` 下
+
+## 🙏 致谢
+
+- 部分登录逻辑及设计参考自 [notebooklm-mcp-cli](https://github.com/jacob-bd/notebooklm-mcp-cli)。

@@ -1,0 +1,227 @@
+# getnotes-cli 🗂️
+
+> Get笔记 CLI 下载工具 — 自动登录、批量下载、知识库管理、Markdown 导出、录音图片等附件下载
+
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+## ✨ 功能
+
+- 🔐 **自动登录** — 通过 Chrome DevTools Protocol 自动获取 Bearer token，无需手动抓包
+- 📥 **批量下载** — 分页拉取全部笔记，支持指定数量
+- 📚 **知识库管理** — 查看、下载我的知识库与订阅知识库
+- 📝 **Markdown 导出** — 每条笔记保存为 Markdown，包含元信息、标签、正文、引用内容
+- 🔊 **附件下载** — 自动下载音频、图片附件，并在 Markdown 中内嵌链接
+- 💾 **缓存管理** — 自动跳过已下载且未变化的笔记，支持增量更新
+- 📁 **Markdown-only 模式** — 默认值保存 Markdown 和附件，不保存技术文件，可以通过选项开启
+- ⚙️ **持久化配置** — 通过 `config` 命令保存常用参数，无需每次重复输入
+- ⏱️ **可配置间隔** — 自定义请求间隔，避免频率限制
+- 📊 **自动索引** — 自动生成笔记索引文件 `INDEX.md`
+
+## 📦 安装
+
+```bash
+cd getnotes-cli
+pip install -e .
+```
+
+安装后即可全局使用 `getnotes` 命令。
+
+## 🚀 使用方法
+
+### 登录
+
+```bash
+# 自动浏览器登录（推荐）
+# 会打开 Chrome，导航到得到笔记页面，登录后自动捕获 token
+getnotes login
+
+# 手动输入 token（跳过浏览器）
+getnotes login --token "Bearer eyJhbGci..."
+```
+
+### 下载笔记
+
+```bash
+# 下载前 100 条笔记（默认）
+getnotes download
+
+# 下载全部笔记
+getnotes download --all
+
+# 自定义下载数量
+getnotes download --limit 50
+
+# 保存技术文件（默认不包含 JSON 等原始数据）
+getnotes download --save-json
+
+# 指定输出目录
+getnotes download --output ~/Desktop/my_notes
+
+# 调整请求间隔（秒）
+getnotes download --delay 1.0
+
+# 自定义每页拉取数量
+getnotes download --page-size 50
+
+# 强制重新下载，忽略缓存
+getnotes download --force
+
+# 组合使用
+getnotes download --all --save-json --delay 1.0
+
+# 直接传 token 下载（一步到位，跳过登录缓存）
+getnotes download --token "Bearer eyJhbGci..." --limit 20
+```
+
+### 知识库管理
+
+```bash
+# 查看所有知识库
+getnotes notebook list
+
+# 按名称下载指定知识库（模糊匹配）
+getnotes notebook download --name "读书笔记"
+
+# 按 ID 下载指定知识库
+getnotes notebook download --id abc123
+
+# 下载全部知识库
+getnotes notebook download-all
+
+# 带选项下载
+getnotes notebook download --name "读书" --save-json --delay 1.0
+getnotes notebook download-all --force --output ~/Desktop/notebooks
+```
+
+### 订阅知识库
+
+```bash
+# 查看所有已订阅的知识库
+getnotes subscribe list
+
+# 按名称下载指定订阅知识库
+getnotes subscribe download --name "某知识库"
+
+# 按 ID 下载
+getnotes subscribe download --id xyz789
+
+# 下载全部订阅知识库
+getnotes subscribe download-all
+
+# 带选项下载
+getnotes subscribe download --name "某知识库" --save-json --force
+getnotes subscribe download-all --delay 1.0 --output ~/Desktop/subscribed
+```
+
+### 缓存管理
+
+```bash
+# 查看缓存状态
+getnotes cache check
+
+# 清除缓存
+getnotes cache clear
+
+# 跳过确认提示
+getnotes cache clear --confirm
+```
+
+### 配置管理
+
+持久化常用参数，避免每次输入。参数优先级：**命令行参数 > 配置文件 > 默认值**。
+
+```bash
+# 设置默认输出目录
+getnotes config set output ~/Desktop/my_notes
+
+# 设置默认请求间隔
+getnotes config set delay 1.0
+
+# 设置每页拉取数量
+getnotes config set page-size 50
+
+# 查看所有配置
+getnotes config get
+
+# 查看某项配置
+getnotes config get output
+
+# 清除所有配置（恢复默认值）
+getnotes config reset
+
+# 跳过确认提示
+getnotes config reset --confirm
+```
+
+### 其他
+
+```bash
+# 查看版本
+getnotes --version
+
+# 查看帮助
+getnotes --help
+getnotes download --help
+getnotes notebook --help
+getnotes subscribe --help
+getnotes config --help
+```
+
+## 📁 输出目录结构
+
+默认输出到 `~/Downloads/getnotes_export/`：
+
+```
+getnotes_export/
+├── INDEX.md                          # 笔记索引
+├── api_responses/                    # 原始 API 响应 JSON
+│   ├── page_0001.json
+│   └── ...
+├── notes/                            # 个人笔记
+│   ├── 20260226_224958_发芽报告/
+│   │   ├── note.md                   # Markdown 笔记
+│   │   ├── note.json                 # 原始 JSON 数据
+│   │   └── attachments/              # 附件（按需创建）
+│   │       ├── attachment_1.mp3
+│   │       └── image_1.jpg
+│   └── ...
+└── notebooks/                        # 知识库笔记（包含我的知识库和订阅知识库）
+    ├── 读书笔记/                      # 按知识库名称分目录
+    │   ├── INDEX.md
+    │   ├── 20260226_笔记标题/
+    │   │   └── note.md
+    │   └── ...
+    └── 某订阅知识库/
+        ├── INDEX.md
+        └── ...
+```
+
+> 默认不会创建 `api_responses/` 目录和 `note.json` 文件。使用 `--save-json` 选项时才会保存这些技术文件。
+
+## 🔐 Token 管理
+
+- Token 通过 CDP（Chrome DevTools Protocol）自动获取
+- 缓存在 `~/.getnotes-cli/auth.json`
+- 得到 Token 约 30 分钟有效，过期后自动提示重新登录
+- 也支持 `--token` 参数手动传入
+
+## ⚙️ 配置文件
+
+用户配置保存在 `~/.getnotes-cli/config.json`，支持以下配置项：
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `output` | string | `~/Downloads/getnotes_export` | 默认输出目录 |
+| `delay` | float | `0.5` | 请求间隔（秒） |
+| `page-size` | int | `20` | 每页拉取数量 |
+
+*注：缓存清单文件 `cache_manifest.json` 也会统一保存在此目录。*
+
+## ⚠️ 注意事项
+
+- 首次使用请先运行 `getnotes login` 登录
+- 附件 URL 中的签名有过期时间，建议一次性下载完成
+- 已下载的附件不会重复下载（自动跳过）
+- 默认下载前 100 条用于调试，确认无误后使用 `--all` 下载全部
+- 知识库下载按知识库名称创建子目录，统一保存在 `notebooks/` 下

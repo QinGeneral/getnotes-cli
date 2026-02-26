@@ -1,0 +1,16 @@
+# 缓存
+cache_manifest.json
+__pycache__/
+*.pyc
+
+# 环境
+.env
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store

@@ -8,7 +8,7 @@ import requests
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
 from getnotes_cli.auth import AuthToken
-from getnotes_cli.config import IMAGE_TOKEN_API_URL, NOTE_CREATE_API_URL
+from getnotes_cli.config import IMAGE_TOKEN_API_URL, NOTE_CREATE_API_URL, LINK_NOTE_CREATE_API_URL
 
 class NoteCreator:
     """笔记创建器，处理图片上传和笔记创建"""
@@ -176,3 +176,44 @@ class NoteCreator:
             raise RuntimeError(f"创建笔记失败: {data}")
             
         return data.get("c", {})
+
+    def create_note_from_link(self, url: str):
+        """通过链接地址创建笔记并获取 AI 总结流（SSE）
+        
+        Yields:
+            dict: 解析后的事件数据
+        """
+        payload = {
+            "attachments": [
+                {
+                    "size": 100,
+                    "type": "link",
+                    "title": "",
+                    "url": url
+                }
+            ],
+            "content": "",
+            "entry_type": "ai",
+            "note_type": "link",
+            "source": "web",
+            "prompt_template_id": ""
+        }
+
+        resp = requests.post(
+            LINK_NOTE_CREATE_API_URL,
+            headers=self.headers,
+            json=payload,
+            stream=True,
+            timeout=60,
+        )
+        resp.raise_for_status()
+
+        for line in resp.iter_lines():
+            if line:
+                decoded_line = line.decode("utf-8")
+                if decoded_line.startswith("data: "):
+                    try:
+                        data = json.loads(decoded_line[6:])
+                        yield data
+                    except json.JSONDecodeError:
+                        pass

@@ -112,6 +112,70 @@ def create(
         raise typer.Exit(1)
 
 
+@app.command("create-link")
+def create_link(
+    url: str = typer.Argument(
+        ...,
+        help="要生成笔记的链接地址"
+    ),
+    token: Optional[str] = typer.Option(
+        None, "--token", "-t",
+        help="直接传入 Bearer token（跳过缓存检查）",
+    ),
+) -> None:
+    """🔗 通过链接创建笔记 — 使用 AI 分析链接内容并生成深度笔记"""
+    from getnotes_cli.auth import get_or_refresh_token, login_with_token
+    from getnotes_cli.creator import NoteCreator
+    import json
+
+    # 获取 token
+    if token:
+        auth = login_with_token(token)
+    else:
+        try:
+            auth = get_or_refresh_token()
+        except RuntimeError as e:
+            console.print(f"\n[red]✗[/red] {e}")
+            console.print("[dim]请先运行 `getnotes login` 登录。[/dim]")
+            raise typer.Exit(1)
+
+    creator = NoteCreator(auth)
+
+    console.print(f"[bold]🔗 正在通过链接生成笔记...[/bold]")
+    console.print(f"[dim]链接: {url}[/dim]\n")
+
+    try:
+        events = creator.create_note_from_link(url)
+        console.print("[cyan]AI 解析中...[/cyan]")
+        note_id = None
+        for data in events:
+            msg_type = data.get("msg_type")
+            inner_data = data.get("data", {})
+            if msg_type == -1 and "note_id" in inner_data:
+                note_id = inner_data["note_id"]
+            elif msg_type == 1:
+                msg_str = inner_data.get("msg", "{}")
+                try:
+                    msg_json = json.loads(msg_str)
+                    if "content" in msg_json:
+                        console.print(msg_json["content"], end="")
+                    elif "summary_title" in msg_json:
+                        console.print(msg_json["summary_title"], end="")
+                    elif "instruction" in msg_json:
+                         console.print(msg_json["instruction"], end="")
+                except json.JSONDecodeError:
+                    pass
+
+        console.print()
+        console.print(f"\n[green]✓[/green] 笔记创建成功！")
+        if note_id:
+            console.print(f"  ID: {note_id}")
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] 创建失败: {e}")
+        raise typer.Exit(1)
+
+
+
 # ========================================================================
 # download 命令
 # ========================================================================

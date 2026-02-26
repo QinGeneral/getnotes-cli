@@ -5,6 +5,11 @@
 此文件的格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并且本项目遵循 [语义化版本规范 (Semantic Versioning)](https://semver.org/spec/v2.0.0.html)。
 
+## [0.1.2] - 2026-02-27
+
+### 新增 (Added)
+- **链接笔记**：新增 `create-link` 命令，支持通过 URL 链接自动抓取网页内容并创建笔记。
+
 ## [0.1.1] - 2026-02-27
 
 ### 新增 (Added)

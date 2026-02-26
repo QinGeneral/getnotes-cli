@@ -28,11 +28,12 @@ git pull origin main
 4. Ask the user for the new version number
 ```bash
 # INTERACTIVE: Ask user for the new version number (e.g., 0.1.1)
-# You must pause here and ask the user for X.Y.Z
+# Note: You can skip modifying the version and just use the CURRENT_VERSION
 ```
 
 5. Bump version in pyproject.toml
 ```bash
+# ONLY RUN THIS if the user provided a NEW_VERSION. Skip if using CURRENT_VERSION.
 # Replace NEW_VERSION with the version provided by the user
 NEW_VERSION="WAITING_FOR_USER"
 sed -i '' "s/version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
@@ -42,25 +43,28 @@ sed -i '' "s/version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" pyproje
 
 7. Commit all changes:
 ```bash
+# Set TARGET_VERSION based on user's choice
+# TARGET_VERSION=$NEW_VERSION or TARGET_VERSION=$CURRENT_VERSION
+TARGET_VERSION="WAITING_FOR_USER"
 git add pyproject.toml CHANGELOG.md
-git commit -m "chore: release v$NEW_VERSION"
+git commit -m "chore: release v$TARGET_VERSION"
 ```
 
 8. Push and tag:
 ```bash
-git tag "v$NEW_VERSION"
+git tag "v$TARGET_VERSION"
 git push origin main
-git push origin "v$NEW_VERSION"
+git push origin "v$TARGET_VERSION"
 ```
 
 9. Create a GitHub release to trigger PyPI publish:
 ```bash
-gh release create "v$NEW_VERSION" --title "v$NEW_VERSION" --generate-notes
+gh release create "v$TARGET_VERSION" --title "v$TARGET_VERSION" --generate-notes
 ```
 
 ## Checklist
 
-- [ ] Version bumped in `pyproject.toml`
+- [ ] Version bumped in `pyproject.toml` (if requested)
 - [ ] CHANGELOG updated
 - [ ] Committed and pushed
 - [ ] Tagged and pushed tag

@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [
     { name = "Han Zhang" }
 ]
-keywords = ["getnotes", "得到笔记", "cli", "download", "markdown"]
+keywords = ["getnotes", "Get 笔记", "cli", "download", "markdown"]
 
 dependencies = [
     "typer>=0.9.0",

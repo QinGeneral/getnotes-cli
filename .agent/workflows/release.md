@@ -4,68 +4,29 @@ description: How to automate the release of getnotes-cli to PyPI
 
 # Release Process
 
-// turbo-all
-
 ## Steps
 
-1. Configure Python path and UV
-```bash
-export PATH="$HOME/.cargo/bin:$PATH"
-```
-
-2. Read the current version from pyproject.toml
+1. 检索当前版本号，然后找我确认更新后的版本号是什么
 ```bash
 CURRENT_VERSION=$(grep -m 1 '^version = ' pyproject.toml | cut -d '"' -f 2)
 echo "Current version is: $CURRENT_VERSION"
 ```
 
-3. Ensure you're on the main branch and it's up to date
+2. 修改版本号和 changelog，然后提交
 ```bash
-git checkout main
-git pull origin main
-```
-
-4. Ask the user for the new version number
-```bash
-# INTERACTIVE: Ask user for the new version number (e.g., 0.1.1)
-# Note: You can skip modifying the version and just use the CURRENT_VERSION
-```
-
-5. Bump version in pyproject.toml
-```bash
-# ONLY RUN THIS if the user provided a NEW_VERSION. Skip if using CURRENT_VERSION.
-# Replace NEW_VERSION with the version provided by the user
-NEW_VERSION="WAITING_FOR_USER"
-sed -i '' "s/version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
-```
-
-6. Update `CHANGELOG.md` with the new version entry (ask user for details if needed)
-
-7. Commit all changes:
-```bash
-# Set TARGET_VERSION based on user's choice
-# TARGET_VERSION=$NEW_VERSION or TARGET_VERSION=$CURRENT_VERSION
-TARGET_VERSION="WAITING_FOR_USER"
+# Agent 注意：请先使用文件编辑相关工具修改 pyproject.toml 和 CHANGELOG.md，将版本号更新为确认后的版本。<NEW_VERSION> 替换为实际版本号。
 git add pyproject.toml CHANGELOG.md
-git commit -m "chore: release v$TARGET_VERSION"
+git commit -m "chore: release v<NEW_VERSION>"
 ```
 
-8. Push and tag:
+3. 推代码，打 tag
 ```bash
-git tag "v$TARGET_VERSION"
 git push origin main
-git push origin "v$TARGET_VERSION"
+git tag "v<NEW_VERSION>"
+git push origin "v<NEW_VERSION>"
 ```
 
-9. Create a GitHub release to trigger PyPI publish:
+4. gh release
 ```bash
-gh release create "v$TARGET_VERSION" --title "v$TARGET_VERSION" --generate-notes
+gh release create "v<NEW_VERSION>" --title "v<NEW_VERSION>" --generate-notes
 ```
-
-## Checklist
-
-- [ ] Version bumped in `pyproject.toml` (if requested)
-- [ ] CHANGELOG updated
-- [ ] Committed and pushed
-- [ ] Tagged and pushed tag
-- [ ] GitHub release created (triggers PyPI publish via publish.yml)

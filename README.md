@@ -25,6 +25,20 @@
 
 ## 📦 安装
 
+### 使用 uv 安装（推荐）
+
+```bash
+uv tool install getnotes-cli
+```
+
+### 使用 pip 安装
+
+```bash
+pip install getnotes-cli
+```
+
+### 源码安装（本地开发）
+
 ```bash
 cd getnotes-cli
 pip install -e .

@@ -5,6 +5,13 @@
 此文件的格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并且本项目遵循 [语义化版本规范 (Semantic Versioning)](https://semver.org/spec/v2.0.0.html)。
 
+## [0.1.1] - 2026-02-27
+
+### 新增 (Added)
+- **创建笔记功能**：实现创建新笔记功能，支持图片上传并自动转换链接。提供 CLI 命令集成支持本地直接新建笔记。
+- **文档完善**：新增了有关知识库 (notebooks)、笔记 (notes) 以及 Agent 工作流 (AGENT.md) 的使用说明；添加了 GitHub 评论操作文档指南。
+- **发布配置更新**：优化与新增部分 GitHub Workflow 以支持自动化部署与评论。
+
 ## [0.1.0] - 2026-02-27
 
 这是 `getnotes-cli` 的首次发布版本，包含以下核心功能集锦：

@@ -12,6 +12,12 @@ NOTES_API_URL = "https://get-notes.luojilab.com/voicenotes/web/notes"
 # 知识库列表 API
 NOTEBOOKS_API_URL = "https://knowledge-api.trytalks.com/v1/web/topic/mine/list"
 
+# 创建笔记 API
+NOTE_CREATE_API_URL = "https://get-notes.luojilab.com/voicenotes/web/notes"
+
+# 获取图片上传 Token API
+IMAGE_TOKEN_API_URL = "https://get-notes.luojilab.com/voicenotes/web/token/image"
+
 # 订阅知识库列表 API
 SUBSCRIBE_NOTEBOOKS_API_URL = "https://knowledge-api.trytalks.com/v1/web/subscribe/topic/list"
 

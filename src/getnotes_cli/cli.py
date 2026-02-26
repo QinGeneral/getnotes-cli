@@ -59,6 +59,60 @@ def login(
 
 
 # ========================================================================
+# create 命令
+# ========================================================================
+
+
+@app.command()
+def create(
+    file: Path = typer.Option(
+        ..., "--file", "-f",
+        exists=True, dir_okay=False, readable=True, resolve_path=True,
+        help="要创建为得到笔记的 Markdown 文件或文本文件",
+    ),
+    images: Optional[list[Path]] = typer.Option(
+        None, "--image", "-i",
+        exists=True, dir_okay=False, readable=True, resolve_path=True,
+        help="要上传并插入的图片文件（可多次指定），将追加到文本末尾",
+    ),
+    token: Optional[str] = typer.Option(
+        None, "--token", "-t",
+        help="直接传入 Bearer token（跳过缓存检查）",
+    ),
+) -> None:
+    """📝 创建笔记 — 从本地文件与图片发布得到笔记"""
+    from getnotes_cli.auth import get_or_refresh_token, login_with_token
+    from getnotes_cli.creator import NoteCreator
+
+    # 获取 token
+    if token:
+        auth = login_with_token(token)
+    else:
+        try:
+            auth = get_or_refresh_token()
+        except RuntimeError as e:
+            console.print(f"\n[red]✗[/red] {e}")
+            console.print("[dim]请先运行 `getnotes login` 登录。[/dim]")
+            raise typer.Exit(1)
+
+    text = file.read_text(encoding="utf-8")
+    creator = NoteCreator(auth)
+
+    console.print(f"[bold]📝 正在创建笔记: {file.name}[/bold]")
+    if images:
+        console.print(f"[dim]包含 {len(images)} 张图片待上传...[/dim]")
+
+    try:
+        data = creator.create_note(text, images)
+        console.print(f"\n[green]✓[/green] 创建笔记成功！")
+        console.print(f"  ID: {data.get('note_id', '')}")
+        console.print(f"  时间: {data.get('created_at', '')}")
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] 创建失败: {e}")
+        raise typer.Exit(1)
+
+
+# ========================================================================
 # download 命令
 # ========================================================================
 

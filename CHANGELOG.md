@@ -5,6 +5,12 @@
 此文件的格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并且本项目遵循 [语义化版本规范 (Semantic Versioning)](https://semver.org/spec/v2.0.0.html)。
 
+## [0.1.4] - 2026-02-28
+
+### 新增 (Added)
+- **笔记搜索功能**：新增 `search` CLI 命令，支持根据关键词搜索笔记，结果以 Rich 表格展示，支持分页浏览。
+- **MCP 搜索工具**：MCP 服务器新增 `search_notes(query)` 工具，允许 LLM 客户端直接搜索用户笔记并返回结构化结果。
+
 ## [0.1.3] - 2026-02-27
 
 ### 新增 (Added)

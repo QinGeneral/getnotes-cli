@@ -204,6 +204,41 @@ getnotes subscribe --help
 getnotes config --help
 ```
 
+## 🤖 MCP 服务器
+
+Get笔记 CLI 提供原生的 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) 服务器支持，允许集成 [Claude Desktop](https://claude.ai/download) 等 AI 客户端直接为你管理笔记和知识库。
+
+### 配置 Claude Desktop
+
+编辑 Claude Desktop 配置文件 `claude_desktop_config.json`（通常在 `~/Library/Application Support/Claude/`）：
+
+```json
+{
+  "mcpServers": {
+    "getnotes": {
+      "command": "uv",
+      "args": [
+        "tool",
+        "run",
+        "getnotes-mcp"
+      ]
+    }
+  }
+}
+```
+
+> **注意**：在使用 MCP 服务器前，确保你在终端执行过 `getnotes login` 获取了 Token。
+
+### 可用 MCP Tools
+
+- `download_notes(limit=10)`: 下载近期笔记为 Markdown 文件。
+- `create_note(content)`: 直接提交文本建立新笔记。
+- `create_link_note(url)`: 通过 AI 解析链接创建深度笔记。
+- `list_notebooks()`: 获取你创建的知识库列表及对应 ID。
+- `download_notebook(notebook_id)`: 下载指定的知识库内容。
+- `list_subscribed_notebooks()`: 获取订阅知识库列表。
+- `download_subscribed_notebook(notebook_id)`: 下载指定的订阅知识库。
+
 ## 📁 输出目录结构
 
 默认输出到 `~/Downloads/getnotes_export/`：

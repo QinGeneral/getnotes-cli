@@ -21,10 +21,12 @@ dependencies = [
     "websocket-client>=1.6.0",
     "requests-toolbelt>=1.0.0",
     "requests>=2.0.0",
+    "fastmcp>=0.1.0",
 ]
 
 [project.scripts]
 getnotes = "getnotes_cli.cli:main"
+getnotes-mcp = "getnotes_cli.mcp.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/getnotes_cli"]

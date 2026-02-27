@@ -5,7 +5,7 @@
 此文件的格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并且本项目遵循 [语义化版本规范 (Semantic Versioning)](https://semver.org/spec/v2.0.0.html)。
 
-## [0.1.4] - 2026-02-28
+## [0.1.5] - 2026-02-28
 
 ### 新增 (Added)
 - **笔记搜索功能**：新增 `search` CLI 命令，支持根据关键词搜索笔记，结果以 Rich 表格展示，支持分页浏览。

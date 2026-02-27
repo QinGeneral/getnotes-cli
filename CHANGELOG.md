@@ -5,6 +5,18 @@
 此文件的格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并且本项目遵循 [语义化版本规范 (Semantic Versioning)](https://semver.org/spec/v2.0.0.html)。
 
+## [0.1.3] - 2026-02-27
+
+### 新增 (Added)
+- **MCP 服务器支持**：引入了一个由 `fastmcp` 驱动的原生 MCP (Model Context Protocol) 服务器，允许集成各种大模型客户端（例如 Claude Desktop），通过 `getnotes-mcp` 直接为用户管理笔记和知识库内容。新增工具如下：
+  - `download_notes(limit=10)`
+  - `create_note(content)`
+  - `create_link_note(url)`
+  - `list_notebooks()`
+  - `download_notebook(notebook_id)`
+  - `list_subscribed_notebooks()`
+  - `download_subscribed_notebook(notebook_id)`
+
 ## [0.1.2] - 2026-02-27
 
 ### 新增 (Added)

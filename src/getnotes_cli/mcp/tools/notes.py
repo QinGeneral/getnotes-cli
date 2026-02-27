@@ -7,9 +7,10 @@ from getnotes_cli.auth import get_or_refresh_token
 from getnotes_cli.config import DEFAULT_OUTPUT_DIR
 from getnotes_cli.creator import NoteCreator
 from getnotes_cli.downloader import NoteDownloader
+from getnotes_cli.searcher import NoteSearcher
 
 # We will export the functions that should be registered
-__all__ = ["download_notes", "create_note", "create_link_note"]
+__all__ = ["download_notes", "create_note", "create_link_note", "search_notes"]
 
 def download_notes(limit: int = 10, force: bool = False) -> str:
     """Download the most recent notes to the default output directory.
@@ -107,3 +108,71 @@ def create_link_note(url: str) -> str:
             
     except Exception as e:
         return f"Error creating note from link: {e}"
+
+def search_notes(query: str, page: int = 1, page_size: int = 10) -> str:
+    """Search for notes by keyword and return matching results.
+    
+    Args:
+        query: The search keyword or phrase to find relevant notes.
+        page: Page number (starting from 1, default: 1).
+        page_size: Number of results per page (default: 10).
+        
+    Returns:
+        A formatted string with matching notes including titles, types, tags, and snippets.
+    """
+    try:
+        auth = get_or_refresh_token()
+    except Exception as e:
+        return f"Error: Authentication failed. Please run 'getnotes login' in your terminal. ({e})"
+        
+    searcher = NoteSearcher(auth)
+    
+    try:
+        result = searcher.search(query, page=page, page_size=page_size)
+    except Exception as e:
+        return f"Error searching notes: {e}"
+    
+    items = result["items"]
+    total = result["total"]
+    has_more = result["has_more"]
+    
+    if not items:
+        return f"No notes found matching '{query}'."
+    
+    lines = [f"Found {total} notes matching '{query}' (page {page}):"]
+    lines.append("")
+    
+    for i, item in enumerate(items, (page - 1) * page_size + 1):
+        title = NoteSearcher.strip_highlight(item.get("title", "").strip())
+        note_type = item.get("note_type", "")
+        note_id = item.get("note_id", "")
+        created = item.get("created_at", "")
+        
+        # Get highlight snippet
+        highlight = item.get("highlight_info", {})
+        snippet = ""
+        for key in ("title", "content", "ref_content"):
+            parts = highlight.get(key, [])
+            text = next((p for p in parts if p.strip()), "")
+            if text:
+                snippet = NoteSearcher.extract_highlight(text)
+                break
+        
+        display = title or snippet[:60] or f"(Note {note_id[-8:]})"
+        tags = ", ".join(
+            NoteSearcher.strip_highlight(t.get("name", "")) for t in item.get("tags", [])
+            if t.get("type") != "system"
+        )
+        
+        lines.append(f"{i}. [{note_type}] {display}")
+        if tags:
+            lines.append(f"   Tags: {tags}")
+        if snippet and title:
+            lines.append(f"   Snippet: {snippet}")
+        lines.append(f"   ID: {note_id} | Created: {created}")
+        lines.append("")
+    
+    if has_more:
+        lines.append(f"(More results available — use page={page + 1} to see next page)")
+    
+    return "\n".join(lines)

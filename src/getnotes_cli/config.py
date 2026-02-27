@@ -18,6 +18,9 @@ NOTE_CREATE_API_URL = "https://get-notes.luojilab.com/voicenotes/web/notes"
 # 通过链接创建笔记流式 API
 LINK_NOTE_CREATE_API_URL = "https://get-notes.luojilab.com/voicenotes/web/notes/stream"
 
+# 搜索笔记 API
+SEARCH_API_URL = "https://get-notes.luojilab.com/voicenotes/web/notes/search"
+
 # 获取图片上传 Token API
 IMAGE_TOKEN_API_URL = "https://get-notes.luojilab.com/voicenotes/web/token/image"
 

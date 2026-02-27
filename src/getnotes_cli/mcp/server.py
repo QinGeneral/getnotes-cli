@@ -20,6 +20,7 @@ Tools available:
 - download_notes(limit=10): Download recent notes as Markdown
 - create_note(content): Create a new note from text content
 - create_link_note(url): Use AI to create a deep note from a link URL
+- search_notes(query): Search notes by keyword and return matching results
 - list_notebooks(): Get a list of the user's notebooks
 - download_notebook(notebook_id): Download a specific notebook
 

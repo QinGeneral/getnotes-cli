@@ -175,6 +175,96 @@ def create_link(
         raise typer.Exit(1)
 
 
+# ========================================================================
+# search 命令
+# ========================================================================
+
+
+@app.command()
+def search(
+    query: str = typer.Argument(
+        ...,
+        help="搜索关键词",
+    ),
+    page: int = typer.Option(
+        1, "--page", "-p",
+        help="页码（从 1 开始）",
+    ),
+    page_size: int = typer.Option(
+        10, "--page-size", "-s",
+        help="每页数量（默认 10）",
+    ),
+    token: Optional[str] = typer.Option(
+        None, "--token", "-t",
+        help="直接传入 Bearer token（跳过缓存检查）",
+    ),
+) -> None:
+    """🔍 搜索笔记 — 根据关键词搜索相关笔记"""
+    from getnotes_cli.searcher import NoteSearcher
+
+    auth = _get_auth(token)
+
+    console.print(f"\n[bold]🔍 正在搜索: {query}[/bold]\n")
+
+    try:
+        searcher = NoteSearcher(auth)
+        result = searcher.search(query, page=page, page_size=page_size)
+    except Exception as e:
+        console.print(f"[red]✗[/red] 搜索失败: {e}")
+        raise typer.Exit(1)
+
+    items = result["items"]
+    total = result["total"]
+    has_more = result["has_more"]
+
+    if not items:
+        console.print("[dim]未找到相关笔记。[/dim]")
+        return
+
+    table = Table(title=f"搜索结果 — '{query}' （共 {total} 条，第 {page} 页）")
+    table.add_column("#", style="dim", width=4)
+    table.add_column("标题 / 摘要", style="cyan", max_width=50)
+    table.add_column("类型", style="yellow", width=8)
+    table.add_column("标签", style="green", max_width=20)
+    table.add_column("创建时间", style="dim", width=12)
+
+    for i, item in enumerate(items, (page - 1) * page_size + 1):
+        title = NoteSearcher.strip_highlight(item.get("title", "").strip())
+        note_type = item.get("note_type", "")
+
+        # 获取高亮摘要
+        highlight = item.get("highlight_info", {})
+        snippet = ""
+        for key in ("title", "content", "ref_content"):
+            parts = highlight.get(key, [])
+            text = next((p for p in parts if p.strip()), "")
+            if text:
+                snippet = NoteSearcher.extract_highlight(text)
+                break
+
+        display = title if title else (snippet[:40] + "..." if len(snippet) > 40 else snippet)
+        if not display:
+            display = f"(ID: {item.get('note_id', '?')[-8:]})"
+
+        tags = ", ".join(
+            NoteSearcher.strip_highlight(t.get("name", "")) for t in item.get("tags", [])
+            if t.get("type") != "system"
+        )
+        if len(tags) > 20:
+            tags = tags[:18] + "…"
+
+        created = item.get("created_at", "")[:10]
+
+        table.add_row(str(i), display, note_type, tags, created)
+
+    console.print(table)
+
+    if has_more:
+        next_page = page + 1
+        console.print(f"\n[dim]还有更多结果，使用 `getnotes search \"{query}\" --page {next_page}` 查看下一页[/dim]")
+    console.print(f"[dim]共 {total} 条匹配结果[/dim]")
+
+
 
 # ========================================================================
 # download 命令

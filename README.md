@@ -216,10 +216,10 @@ Get笔记 CLI 提供原生的 [Model Context Protocol (MCP)](https://modelcontex
 {
   "mcpServers": {
     "getnotes": {
-      "command": "uv",
+      "command": "uvx",
       "args": [
-        "tool",
-        "run",
+        "--from",
+        "getnotes-cli",
         "getnotes-mcp"
       ]
     }

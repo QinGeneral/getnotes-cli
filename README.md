@@ -38,6 +38,7 @@ Get笔记 CLI 提供原生的 [Model Context Protocol (MCP)](https://modelcontex
     "getnotes": {
       "command": "uvx",
       "args": [
+        "--refresh",
         "--from",
         "getnotes-cli",
         "getnotes-mcp"
@@ -46,6 +47,8 @@ Get笔记 CLI 提供原生的 [Model Context Protocol (MCP)](https://modelcontex
   }
 }
 ```
+
+> `--refresh` 参数确保每次启动时自动拉取 PyPI 上的最新版本，无需手动执行 `uv tool upgrade`。
 
 > **注意**：在使用 MCP 服务器前，确保你在终端执行过 `getnotes login` 获取了 Token。
 

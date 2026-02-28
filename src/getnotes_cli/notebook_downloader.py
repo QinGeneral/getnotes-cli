@@ -1,6 +1,7 @@
 """知识库笔记下载器 — 下载知识库内的笔记资源并保存为 Markdown"""
 
 import json
+import logging
 import os
 import time
 from datetime import datetime
@@ -15,6 +16,8 @@ from getnotes_cli.markdown import (
     sanitize_filename,
 )
 from getnotes_cli.notebook import fetch_notebook_resources
+
+logger = logging.getLogger(__name__)
 
 
 class NotebookDownloader:
@@ -63,11 +66,11 @@ class NotebookDownloader:
         self._existing_notes = {}
         self._scan_existing_notes(notebook_dir)
 
-        print(f"\n{'='*60}")
-        print(f"📚 知识库: {name}")
-        print(f"   内容总数: {total_count} | ID: {topic_id_alias}")
-        print(f"   输出目录: {notebook_dir}")
-        print(f"{'='*60}")
+        logger.info("=" * 60)
+        logger.info("📚 知识库: %s", name)
+        logger.info("   内容总数: %s | ID: %s", total_count, topic_id_alias)
+        logger.info("   输出目录: %s", notebook_dir)
+        logger.info("=" * 60)
 
         local_stats = {"notes": 0, "files": 0, "skipped": 0}
 
@@ -83,8 +86,8 @@ class NotebookDownloader:
         for k in local_stats:
             self.stats[k] += local_stats[k]
 
-        print(f"\n✅ 知识库 [{name}] 下载完成: "
-              f"{local_stats['notes']} 篇笔记, {local_stats['files']} 个文件")
+        logger.info("✅ 知识库 [%s] 下载完成: %d 篇笔记, %d 个文件",
+                     name, local_stats['notes'], local_stats['files'])
 
         return local_stats
 
@@ -111,7 +114,7 @@ class NotebookDownloader:
         page = 1
 
         while True:
-            print(f"\n{indent}📄 正在拉取第 {page} 页 (dir={directory_id})...")
+            logger.info("%s📄 正在拉取第 %d 页 (dir=%s)...", indent, page, directory_id)
 
             content = fetch_notebook_resources(
                 self.token, topic_id_alias, directory_id, page=page, client=self.client
@@ -121,14 +124,14 @@ class NotebookDownloader:
             if page == 1:
                 directories = content.get("directories") or []
                 if directories:
-                    print(f"{indent}  📂 发现 {len(directories)} 个子目录")
+                    logger.info("%s  📂 发现 %d 个子目录", indent, len(directories))
                     for sub_dir in directories:
                         sub_name = sub_dir.get("name", "未命名目录")
                         sub_id = sub_dir.get("id", 0)
                         sub_target = target_dir / sanitize_filename(sub_name)
                         sub_target.mkdir(parents=True, exist_ok=True)
 
-                        print(f"{indent}  📂 进入子目录: {sub_name}")
+                        logger.info("%s  📂 进入子目录: %s", indent, sub_name)
                         self._download_directory(
                             topic_id_alias, sub_id, sub_target, stats, depth=depth + 1
                         )
@@ -139,11 +142,11 @@ class NotebookDownloader:
             has_next = content.get("has_next", 0)
 
             if not resources and page == 1 and not (content.get("directories") or []):
-                print(f"{indent}  ⚠️ 该目录暂无内容。")
+                logger.info("%s  ⚠️ 该目录暂无内容。", indent)
                 break
 
             if resources:
-                print(f"{indent}  本页 {len(resources)} 个资源:")
+                logger.info("%s  本页 %d 个资源:", indent, len(resources))
                 for resource in resources:
                     resource_type = resource.get("resource_type", "")
                     if resource_type == "NOTE":
@@ -155,7 +158,7 @@ class NotebookDownloader:
                         self._process_file_resource(resource, files_dir)
                         stats["files"] += 1
                     else:
-                        print(f"{indent}    ⏭ 跳过未知类型: {resource_type}")
+                        logger.info("%s    ⏭ 跳过未知类型: %s", indent, resource_type)
                         stats["skipped"] += 1
 
             if not has_next:
@@ -166,15 +169,15 @@ class NotebookDownloader:
 
     def download_all(self, notebooks: list[dict]) -> dict:
         """下载所有知识库的笔记。"""
-        print(f"\n🚀 开始下载 {len(notebooks)} 个知识库...")
+        logger.info("🚀 开始下载 %d 个知识库...", len(notebooks))
 
         for i, nb in enumerate(notebooks, 1):
             name = nb.get("name", "未命名")
-            print(f"\n[{i}/{len(notebooks)}] 正在处理知识库: {name}")
+            logger.info("[%d/%d] 正在处理知识库: %s", i, len(notebooks), name)
             try:
                 self.download_notebook(nb)
             except Exception as e:
-                print(f"  ❌ 下载失败: {e}")
+                logger.error("  ❌ 下载失败: %s", e)
             time.sleep(self.delay)
 
         self._print_summary(len(notebooks))
@@ -199,7 +202,7 @@ class NotebookDownloader:
         if existing_dir and not self.force:
             md_file = existing_dir / "note.md"
             if md_file.exists():
-                print(f"    ⏭ 已存在: {title[:40]}")
+                logger.info("    ⏭ 已存在: %s", title[:40])
                 return
 
         # 生成新的文件夹名
@@ -209,7 +212,7 @@ class NotebookDownloader:
         if note_dir.exists() and not self.force:
             md_file = note_dir / "note.md"
             if md_file.exists():
-                print(f"    ⏭ 已存在: {title[:40]}")
+                logger.info("    ⏭ 已存在: %s", title[:40])
                 return
 
         note_dir.mkdir(parents=True, exist_ok=True)
@@ -229,7 +232,7 @@ class NotebookDownloader:
             )
 
         display_title = title[:40] + "..." if len(title) > 40 else title
-        print(f"    ✨ {display_title}")
+        logger.info("    ✨ %s", display_title)
 
     def _process_file_resource(self, resource: dict, files_dir: Path) -> None:
         """处理文件类型资源"""
@@ -241,7 +244,7 @@ class NotebookDownloader:
         file_url = meta.get("file_url", "")
 
         if not file_url:
-            print(f"    ⚠️ 文件无下载链接: {name}")
+            logger.warning("    ⚠️ 文件无下载链接: %s", name)
             return
 
         files_dir.mkdir(parents=True, exist_ok=True)
@@ -249,7 +252,7 @@ class NotebookDownloader:
 
         if save_path.exists() and not self.force:
             kb = save_path.stat().st_size / 1024
-            print(f"    ⏭ 已存在: {name} ({kb:.1f} KB)")
+            logger.info("    ⏭ 已存在: %s (%.1f KB)", name, kb)
             return
 
         self._download_file(file_url, save_path)
@@ -297,10 +300,10 @@ class NotebookDownloader:
                         f.write(chunk)
 
             kb = save_path.stat().st_size / 1024
-            print(f"      ✅ 下载: {save_path.name} ({kb:.1f} KB)")
+            logger.info("      ✅ 下载: %s (%.1f KB)", save_path.name, kb)
             return True
         except Exception as e:
-            print(f"      ❌ 下载失败: {save_path.name} - {e}")
+            logger.error("      ❌ 下载失败: %s - %s", save_path.name, e)
             return False
 
     # ------------------------------------------------------------------
@@ -426,7 +429,7 @@ class NotebookDownloader:
                 continue
 
         if self._existing_notes:
-            print(f"  💾 扫描到 {len(self._existing_notes)} 个已有笔记")
+            logger.info("  💾 扫描到 %d 个已有笔记", len(self._existing_notes))
 
     def _make_note_folder_name(
         self, title: str, created_at: str, note_id: str
@@ -483,12 +486,12 @@ class NotebookDownloader:
 
     def _print_summary(self, total_notebooks: int) -> None:
         """打印下载总结"""
-        print(f"\n{'='*60}")
-        print("📊 全部知识库下载总结")
-        print(f"{'='*60}")
-        print(f"  📚 知识库数:   {total_notebooks}")
-        print(f"  📝 笔记:       {self.stats['notes']} 篇")
-        print(f"  📁 文件:       {self.stats['files']} 个")
-        print(f"  ⏭  跳过:       {self.stats['skipped']} 个")
-        print(f"  📂 输出目录:   {self.output_dir.resolve()}")
-        print(f"{'='*60}")
+        logger.info("=" * 60)
+        logger.info("📊 全部知识库下载总结")
+        logger.info("=" * 60)
+        logger.info("  📚 知识库数:   %d", total_notebooks)
+        logger.info("  📝 笔记:       %d 篇", self.stats['notes'])
+        logger.info("  📁 文件:       %d 个", self.stats['files'])
+        logger.info("  ⏭  跳过:       %d 个", self.stats['skipped'])
+        logger.info("  📂 输出目录:   %s", self.output_dir.resolve())
+        logger.info("=" * 60)

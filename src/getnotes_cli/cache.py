@@ -1,9 +1,12 @@
 """缓存管理 — 跟踪已下载笔记的版本与状态"""
 
 import json
+import logging
 from pathlib import Path
 
 from getnotes_cli.config import CACHE_MANIFEST_FILE, CONFIG_DIR
+
+logger = logging.getLogger(__name__)
 
 
 class CacheManager:
@@ -20,7 +23,7 @@ class CacheManager:
             try:
                 self._manifest = json.loads(self.cache_path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, IOError):
-                print("⚠️  缓存清单损坏，将重新构建。")
+                logger.warning("⚠️  缓存清单损坏，将重新构建。")
                 self._manifest = {}
         return self._manifest
 
@@ -118,7 +121,7 @@ class CacheManager:
 
         if rebuilt > 0:
             self.save()
-            print(f"💾 从磁盘重建缓存: 恢复了 {rebuilt} 条记录")
+            logger.info("💾 从磁盘重建缓存: 恢复了 %d 条记录", rebuilt)
 
         return rebuilt
 

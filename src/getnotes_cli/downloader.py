@@ -1,6 +1,7 @@
 """核心下载逻辑 — 分页拉取笔记并下载附件"""
 
 import json
+import logging
 import os
 import time
 from datetime import datetime
@@ -16,6 +17,8 @@ from getnotes_cli.markdown import (
     note_to_markdown,
     sanitize_filename,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class NoteDownloader:
@@ -70,7 +73,8 @@ class NoteDownloader:
         try:
             while True:
                 page_num += 1
-                print(f"\n📄 正在拉取第 {page_num} 页 (since_id={since_id or '(首页)'}) ...")
+                logger.info("📄 正在拉取第 %d 页 (since_id=%s) ...",
+                            page_num, since_id or "(首页)")
 
                 data = self._fetch_page(since_id)
 
@@ -85,13 +89,13 @@ class NoteDownloader:
 
                 if total_items is None:
                     total_items = content.get("total_items", "?")
-                    print(f"📊 服务端笔记总数: {total_items}")
+                    logger.info("📊 服务端笔记总数: %s", total_items)
 
                 if not notes:
-                    print("⚠️  本页无数据，结束。")
+                    logger.info("⚠️  本页无数据，结束。")
                     break
 
-                print(f"  本页 {len(notes)} 条笔记:")
+                logger.info("  本页 %d 条笔记:", len(notes))
 
                 for note in notes:
                     self._process_note(note)
@@ -103,27 +107,27 @@ class NoteDownloader:
 
                     # 检查限制
                     if self.limit is not None and self.total_processed >= self.limit:
-                        print(f"\n✅ 已达到下载限制 ({self.limit} 条)，停止。")
-                        print("💡 提示: 若要下载所有笔记，请使用 `getnotes download --all`")
+                        logger.info("✅ 已达到下载限制 (%d 条)，停止。", self.limit)
+                        logger.info("💡 提示: 若要下载所有笔记，请使用 `getnotes download --all`")
                         break
 
                 if self.limit is not None and self.total_processed >= self.limit:
                     break
 
                 if not has_more:
-                    print("\n✅ 所有笔记已下载完毕！")
+                    logger.info("✅ 所有笔记已下载完毕！")
                     break
 
                 since_id = notes[-1].get("id", "")
                 time.sleep(self.delay)
 
         except KeyboardInterrupt:
-            print("\n\n⚠️  用户中断下载。")
+            logger.info("⚠️  用户中断下载。")
         except httpx.HTTPStatusError as e:
-            print(f"\n❌ HTTP 错误: {e}")
-            print("💡 可能需要重新登录: getnotes login")
+            logger.error("❌ HTTP 错误: %s", e)
+            logger.info("💡 可能需要重新登录: getnotes login")
         except Exception as e:
-            print(f"\n❌ 意外错误: {e}")
+            logger.error("❌ 意外错误: %s", e)
             raise
         finally:
             self.cache.save()
@@ -231,7 +235,7 @@ class NoteDownloader:
         try:
             if save_path.exists() and not self.force:
                 kb = save_path.stat().st_size / 1024
-                print(f"    ⏭  已存在: {save_path.name} ({kb:.1f} KB)")
+                logger.info("    ⏭  已存在: %s (%.1f KB)", save_path.name, kb)
                 return True
 
             save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -242,10 +246,10 @@ class NoteDownloader:
                         f.write(chunk)
 
             kb = save_path.stat().st_size / 1024
-            print(f"    ✅ 已下载: {save_path.name} ({kb:.1f} KB)")
+            logger.info("    ✅ 已下载: %s (%.1f KB)", save_path.name, kb)
             return True
         except Exception as e:
-            print(f"    ❌ 下载失败: {save_path.name} - {e}")
+            logger.error("    ❌ 下载失败: %s - %s", save_path.name, e)
             return False
 
     def _make_folder_name(self, note: dict) -> str:
@@ -271,37 +275,37 @@ class NoteDownloader:
             display = title[:40] + "..." if len(title) > 40 else title
             parts.append(display)
         parts.append(action)
-        print(f"  📝 {' | '.join(parts)}")
+        logger.info("  📝 %s", " | ".join(parts))
 
     def _print_banner(self) -> None:
         """打印启动信息"""
-        print("=" * 60)
-        print("🗂️  GetNotes CLI — 得到笔记批量下载工具")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("🗂️  GetNotes CLI — 得到笔记批量下载工具")
+        logger.info("=" * 60)
         mode = "全部笔记" if self.limit is None else f"前 {self.limit} 条"
-        print(f"📥 模式: {mode}")
-        print(f"📂 输出目录: {self.output_dir.resolve()}")
-        print(f"📄 每页: {self.page_size} 条 | ⏱️ 间隔: {self.delay}s")
+        logger.info("📥 模式: %s", mode)
+        logger.info("📂 输出目录: %s", self.output_dir.resolve())
+        logger.info("📄 每页: %d 条 | ⏱️ 间隔: %ss", self.page_size, self.delay)
         if self.save_json:
-            print("📝 保存模式: 包含原始 JSON 数据")
+            logger.info("📝 保存模式: 包含原始 JSON 数据")
         if self.force:
-            print("⚡ 强制模式: 忽略所有缓存")
+            logger.info("⚡ 强制模式: 忽略所有缓存")
         elif self.cache.count > 0:
-            print(f"💾 缓存: 已有 {self.cache.count} 条笔记记录")
-        print("=" * 60)
+            logger.info("💾 缓存: 已有 %d 条笔记记录", self.cache.count)
+        logger.info("=" * 60)
 
     def _print_summary(self) -> None:
         """打印下载总结"""
-        print("\n" + "=" * 60)
-        print("📊 下载总结")
-        print("=" * 60)
-        print(f"  📋 处理笔记:   {self.total_processed} 条")
-        print(f"  ✨ 新增:       {self.stats['new']} 条")
-        print(f"  🔄 更新:       {self.stats['updated']} 条")
-        print(f"  ⏭  缓存跳过:   {self.stats['cached']} 条")
-        print(f"  💾 缓存记录:   {self.cache.count} 条")
-        print(f"  📁 输出目录:   {self.output_dir.resolve()}")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("📊 下载总结")
+        logger.info("=" * 60)
+        logger.info("  📋 处理笔记:   %d 条", self.total_processed)
+        logger.info("  ✨ 新增:       %d 条", self.stats['new'])
+        logger.info("  🔄 更新:       %d 条", self.stats['updated'])
+        logger.info("  ⏭  缓存跳过:   %d 条", self.stats['cached'])
+        logger.info("  💾 缓存记录:   %d 条", self.cache.count)
+        logger.info("  📁 输出目录:   %s", self.output_dir.resolve())
+        logger.info("=" * 60)
 
     def _generate_index(self, total_items) -> None:
         """生成索引文件"""

@@ -1,5 +1,7 @@
 """CLI 入口 — 使用 typer + rich 构建命令行界面"""
 
+import logging
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -10,6 +12,13 @@ from rich.table import Table
 from getnotes_cli import __version__
 from getnotes_cli.config import DEFAULT_LIMIT, DEFAULT_OUTPUT_DIR, PAGE_SIZE, REQUEST_DELAY
 from getnotes_cli.settings import resolve_delay, resolve_output, resolve_page_size
+
+# Configure logging to stderr so CLI users see progress from downloader modules
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    stream=sys.stderr,
+)
 
 console = Console()
 app = typer.Typer(

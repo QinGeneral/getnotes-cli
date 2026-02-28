@@ -1,11 +1,14 @@
 """Auth token 管理 — 缓存与刷新 Bearer token"""
 
 import json
+import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from getnotes_cli.config import AUTH_CACHE_FILE, CONFIG_DIR, DEFAULT_HEADERS
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -85,7 +88,7 @@ def get_or_refresh_token(force_login: bool = False) -> AuthToken:
         if cached and not cached.is_expired():
             return cached
         if cached and cached.is_expired():
-            print("⚠️  Token 已过期，需要重新登录...")
+            logger.warning("⚠️  Token 已过期，需要重新登录...")
 
     # 通过 CDP 获取新 token
     from getnotes_cli.cdp import extract_auth_via_cdp

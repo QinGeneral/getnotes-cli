@@ -5,6 +5,11 @@
 此文件的格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并且本项目遵循 [语义化版本规范 (Semantic Versioning)](https://semver.org/spec/v2.0.0.html)。
 
+## [0.1.6] - 2026-02-28
+
+### 修复 (Fixed)
+- **MCP Server stdio 协议兼容**：修复 MCP 工具（如 `download_subscribed_notebook`）执行时因 `print()` 输出到 stdout 导致 JSON-RPC 协议解析失败的问题，将所有下载模块的进度输出改为 `logging`（输出到 stderr），确保 MCP stdio 传输模式正常工作。
+
 ## [0.1.5] - 2026-02-28
 
 ### 新增 (Added)

@@ -28,5 +28,13 @@ dependencies = [
 getnotes = "getnotes_cli.cli:main"
 getnotes-mcp = "getnotes_cli.mcp.server:main"
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/getnotes_cli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

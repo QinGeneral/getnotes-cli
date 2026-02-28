@@ -1,5 +1,6 @@
 """MCP tools for interacting with Get 笔记 notes."""
 
+import json
 import tempfile
 from pathlib import Path
 
@@ -111,7 +112,7 @@ def create_link_note(url: str) -> str:
 
 def search_notes(query: str, page: int = 1, page_size: int = 10) -> str:
     """Search for notes by keyword and return matching results.
-    
+
     Args:
         query: The search keyword or phrase to find relevant notes.
         page: Page number (starting from 1, default: 1).
@@ -139,40 +140,52 @@ def search_notes(query: str, page: int = 1, page_size: int = 10) -> str:
     if not items:
         return f"No notes found matching '{query}'."
     
-    lines = [f"Found {total} notes matching '{query}' (page {page}):"]
-    lines.append("")
-    
-    for i, item in enumerate(items, (page - 1) * page_size + 1):
+    notes = []
+    for item in items:
+        # Clean highlight tags from title
         title = NoteSearcher.strip_highlight(item.get("title", "").strip())
-        note_type = item.get("note_type", "")
-        note_id = item.get("note_id", "")
-        created = item.get("created_at", "")
         
-        # Get highlight snippet
+        # Extract full content and ref_content, clean hl tags
+        content = NoteSearcher.strip_highlight(item.get("content", "").strip())
+        ref_content = NoteSearcher.strip_highlight(item.get("ref_content", "").strip())
+        
+        # Extract highlight snippet for quick context
         highlight = item.get("highlight_info", {})
         snippet = ""
         for key in ("title", "content", "ref_content"):
             parts = highlight.get(key, [])
             text = next((p for p in parts if p.strip()), "")
             if text:
-                snippet = NoteSearcher.extract_highlight(text)
+                snippet = NoteSearcher.strip_highlight(text).strip()
                 break
         
-        display = title or snippet[:60] or f"(Note {note_id[-8:]})"
-        tags = ", ".join(
-            NoteSearcher.strip_highlight(t.get("name", "")) for t in item.get("tags", [])
+        # Clean tags (filter out system tags)
+        tags = [
+            NoteSearcher.strip_highlight(t.get("name", ""))
+            for t in item.get("tags", [])
             if t.get("type") != "system"
-        )
+        ]
         
-        lines.append(f"{i}. [{note_type}] {display}")
-        if tags:
-            lines.append(f"   Tags: {tags}")
-        if snippet and title:
-            lines.append(f"   Snippet: {snippet}")
-        lines.append(f"   ID: {note_id} | Created: {created}")
-        lines.append("")
+        note_data = {
+            "note_id": item.get("note_id", ""),
+            "title": title,
+            "note_type": item.get("note_type", ""),
+            "content": content,
+            "ref_content": ref_content,
+            "tags": tags,
+            "created_at": item.get("created_at", ""),
+            "source": item.get("source", ""),
+            "highlight_snippet": snippet,
+        }
+        notes.append(note_data)
     
-    if has_more:
-        lines.append(f"(More results available — use page={page + 1} to see next page)")
+    response = {
+        "query": query,
+        "total": total,
+        "page": page,
+        "has_more": has_more,
+        "notes": notes,
+    }
     
-    return "\n".join(lines)
+    return json.dumps(response, ensure_ascii=False, indent=2)
+

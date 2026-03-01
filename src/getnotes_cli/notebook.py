@@ -104,3 +104,43 @@ def fetch_subscribed_notebooks(
     finally:
         if client is None:
             _client.close()
+
+
+def add_note_to_notebook(
+    auth: AuthToken,
+    note_id: str,
+    topic_id: int,
+    directory_id: int,
+    client: httpx.Client | None = None,
+) -> dict:
+    """将笔记添加到指定知识库。
+
+    Args:
+        auth: 认证 token
+        note_id: 笔记 ID（字符串）
+        topic_id: 知识库整数 ID（notebook["id"]）
+        directory_id: 知识库根目录整数 ID（notebook["root_dir"]["id"]）
+        client: 可复用的 httpx 客户端
+
+    Returns:
+        API 响应 dict，成功时包含 {"h": {"c": 0, ...}, "c": "ok"}
+
+    Raises:
+        httpx.HTTPStatusError: 请求失败时
+    """
+    from getnotes_cli.config import ADD_TO_NOTEBOOK_API_URL
+
+    _client = client or httpx.Client(timeout=30)
+    try:
+        headers = auth.get_headers()
+        payload = {
+            "ids": note_id,
+            "topic_id": topic_id,
+            "directory_id": directory_id,
+        }
+        resp = _client.post(ADD_TO_NOTEBOOK_API_URL, headers=headers, json=payload, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+    finally:
+        if client is None:
+            _client.close()

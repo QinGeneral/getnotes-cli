@@ -30,6 +30,9 @@ SUBSCRIBE_NOTEBOOKS_API_URL = "https://knowledge-api.trytalks.com/v1/web/subscri
 # 知识库资源列表 API（笔记本功能）
 KNOWLEDGE_API_URL = "https://knowledge-api.trytalks.com/v1/web/topic/resource/list/mix"
 
+# 笔记加入知识库 API
+ADD_TO_NOTEBOOK_API_URL = "https://get-notes.luojilab.com/voicenotes/web/topics/import/notes"
+
 # 得到笔记登录页
 LOGIN_URL = "https://www.biji.com"
 

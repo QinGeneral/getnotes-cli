@@ -57,11 +57,13 @@ Get笔记 CLI 提供原生的 [Model Context Protocol (MCP)](https://modelcontex
 - `download_notes(limit=10)`: 下载近期笔记为 Markdown 文件。
 - `create_note(content)`: 直接提交文本建立新笔记。
 - `create_link_note(url)`: 通过 AI 解析链接创建深度笔记。
-- `search_notes(query)`: 根据关键词搜索笔记并返回匹配结果。
+- `search_notes(query)`: 根据关键词搜索笔记并返回匹配结果（含全文内容）。
+- `read_note(note_id)`: 通过笔记 ID 读取笔记全文 Markdown 内容。
 - `list_notebooks()`: 获取你创建的知识库列表及对应 ID。
 - `download_notebook(notebook_id)`: 下载指定的知识库内容。
 - `list_subscribed_notebooks()`: 获取订阅知识库列表。
 - `download_subscribed_notebook(notebook_id)`: 下载指定的订阅知识库。
+- `add_note_to_notebook(note_id, notebook_id)`: 将指定笔记加入知识库。
 
 ## 📦 Cli 安装
 
@@ -200,6 +202,36 @@ getnotes subscribe download-all
 # 带选项下载
 getnotes subscribe download --name "某知识库" --save-json --force
 getnotes subscribe download-all --delay 1.0 --output ~/Desktop/subscribed
+```
+
+### 笔记加入知识库
+
+```bash
+# 将笔记加入指定知识库（按名称模糊匹配）
+getnotes notebook add-note --note-id <笔记ID> --name "读书笔记"
+
+# 按知识库 ID 精确指定
+getnotes notebook add-note --note-id <笔记ID> --id abc123
+```
+
+### 导出为 HTML
+
+```bash
+# 将所有已下载的笔记导出为 HTML（默认输出到 html_export/ 子目录）
+getnotes export
+
+# 指定输出目录
+getnotes export --output ~/Desktop/notes_html
+
+# 强制重新转换所有文件
+getnotes export --force
+```
+
+### 同步检测
+
+```bash
+# 检查服务端有多少新笔记待下载
+getnotes sync-check
 ```
 
 ### 缓存管理

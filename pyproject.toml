@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "getnotes-cli"
-version = "0.1.6"
-description = "Get 笔记 CLI 下载工具 — 自动登录、批量下载、Markdown 导出"
+version = "0.2.0"
+description = "Get 笔记 CLI 下载工具 — 自动登录、批量下载、Markdown 导出、知识库管理、MCP 集成"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"

@@ -5,6 +5,18 @@
 此文件的格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并且本项目遵循 [语义化版本规范 (Semantic Versioning)](https://semver.org/spec/v2.0.0.html)。
 
+## [0.2.0] - 2026-03-01
+
+### 新增 (Added)
+- **笔记加入知识库**：新增 `getnotes notebook add-note` 命令，支持将指定笔记（通过 `--note-id`）加入指定知识库（通过 `--name` 或 `--id`）。MCP 同步新增 `add_note_to_notebook(note_id, notebook_id)` 工具。
+- **MCP `read_note` 工具**：新增 `read_note(note_id)` MCP 工具，支持通过笔记 ID 直接读取笔记全文 Markdown 内容；优先读取本地缓存文件，本地未命中时自动通过搜索 API 回退获取内容。
+- **HTML 导出**：新增 `getnotes export` 命令，将本地已下载的 Markdown 笔记批量转换为带样式的 HTML 文件，并自动生成 `index.html` 索引页，支持 `--force` 重新转换与自定义输出目录。
+- **同步检测**：新增 `getnotes sync-check` 命令，对比服务端笔记总数与本地缓存数量，直观展示有多少新笔记待下载。
+
+### 修复 (Fixed)
+- **INDEX.md 生成**：修复默认模式（不开启 `--save-json`）下 INDEX.md 笔记列表为空的问题。现在优先使用缓存清单（`cache_manifest.json`）生成索引，无需依赖 `note.json`；索引表格新增标题列和创建时间列，改为时间降序排列。
+- **Token 401 错误提示**：下载时遇到 HTTP 401 错误时，现在会明确提示"Token 已过期，请重新运行 `getnotes login`"，而非显示通用错误信息。
+
 ## [0.1.6] - 2026-02-28
 
 ### 修复 (Fixed)

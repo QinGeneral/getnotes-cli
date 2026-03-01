@@ -612,6 +612,82 @@ def notebook_download_all(
     downloader.download_all(notebooks)
 
 
+
+@notebook_app.command("add-note")
+def notebook_add_note(
+    note_id: str = typer.Option(
+        ..., "--note-id", "-n",
+        help="要加入知识库的笔记 ID",
+    ),
+    name: Optional[str] = typer.Option(
+        None, "--name",
+        help="知识库名称（模糊匹配）",
+    ),
+    nb_id: Optional[str] = typer.Option(
+        None, "--id",
+        help="知识库 ID (id_alias)",
+    ),
+    token: Optional[str] = typer.Option(
+        None, "--token", "-t",
+        help="直接传入 Bearer token",
+    ),
+) -> None:
+    """➕ 将笔记加入知识库"""
+    from getnotes_cli.notebook import add_note_to_notebook, fetch_notebooks
+
+    if not name and not nb_id:
+        console.print("[red]✗[/red] 请指定 --name 或 --id")
+        console.print("[dim]使用 `getnotes notebook list` 查看可用知识库[/dim]")
+        raise typer.Exit(1)
+
+    auth = _get_auth(token)
+
+    console.print("\n[bold]📚 正在获取知识库列表...[/bold]")
+    notebooks = fetch_notebooks(auth)
+
+    target = None
+    if nb_id:
+        target = next((nb for nb in notebooks if nb.get("id_alias") == nb_id), None)
+        if not target:
+            console.print(f"[red]✗[/red] 未找到 ID 为 \'{nb_id}\' 的知识库")
+            raise typer.Exit(1)
+    elif name:
+        matches = [nb for nb in notebooks if name.lower() in nb.get("name", "").lower()]
+        if not matches:
+            console.print(f"[red]✗[/red] 未找到名称包含 \'{name}\' 的知识库")
+            raise typer.Exit(1)
+        if len(matches) > 1:
+            console.print(f"[yellow]⚠[/yellow] 找到 {len(matches)} 个匹配:")
+            for nb in matches:
+                nb_name_m = nb.get("name", "")
+                nb_id_m = nb.get("id_alias", "")
+                console.print(f"  - {nb_name_m} (ID: {nb_id_m})")
+            console.print("[dim]请使用 --id 精确指定[/dim]")
+            raise typer.Exit(1)
+        target = matches[0]
+
+    topic_id = target.get("id")
+    root_dir = target.get("root_dir", {})
+    directory_id = root_dir.get("id")
+
+    if not topic_id or not directory_id:
+        console.print("[red]✗[/red] 无法获取知识库的 topic_id 或 directory_id")
+        raise typer.Exit(1)
+
+    nb_name = target.get("name", "")
+    console.print(f"[bold]➕ 正在将笔记加入知识库: {nb_name}[/bold]")
+
+    try:
+        result = add_note_to_notebook(auth, note_id, topic_id, directory_id)
+        header = result.get("h", {})
+        if header.get("c") == 0:
+            console.print(f"\n[green]✓[/green] 笔记 `{note_id}` 已成功加入知识库 [{nb_name}]！")
+        else:
+            console.print(f"[yellow]⚠[/yellow] API 返回: {result}")
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] 操作失败: {e}")
+        raise typer.Exit(1)
+
 app.add_typer(notebook_app, name="notebook")
 
 
@@ -929,6 +1005,114 @@ def main_callback(
         raise typer.Exit()
     if ctx.invoked_subcommand is None:
         console.print(ctx.get_help())
+
+# ========================================================================
+# export 命令
+# ========================================================================
+
+@app.command()
+def export(
+    output: Optional[str] = typer.Option(
+        None, "--output", "-o",
+        help="HTML 输出目录（默认在笔记导出目录下的 html_export/）",
+    ),
+    source: Optional[str] = typer.Option(
+        None, "--source", "-s",
+        help="笔记源目录（默认使用配置的 output 目录）",
+    ),
+    force: bool = typer.Option(
+        False, "--force", "-f",
+        help="强制重新转换，忽略已有 HTML 文件",
+    ),
+) -> None:
+    """🌐 导出笔记 — 将本地 Markdown 笔记批量转换为 HTML 格式"""
+    from getnotes_cli.exporter import export_notes_to_html
+
+    source_dir = Path(resolve_output(source, str(DEFAULT_OUTPUT_DIR)))
+    notes_dir = source_dir / "notes"
+
+    if output:
+        output_dir = Path(output).expanduser()
+    else:
+        output_dir = source_dir / "html_export"
+
+    console.print(f"\n[bold]🌐 正在导出 Markdown 笔记为 HTML...[/bold]")
+    console.print(f"  源目录: {notes_dir}")
+    console.print(f"  输出目录: {output_dir}\n")
+
+    if not notes_dir.exists():
+        console.print(f"[red]✗[/red] 笔记目录不存在: {notes_dir}")
+        console.print("[dim]请先运行 `getnotes download` 下载笔记。[/dim]")
+        raise typer.Exit(1)
+
+    stats = export_notes_to_html(notes_dir, output_dir, force=force)
+
+    console.print(f"\n[bold]📊 导出完成[/bold]")
+    console.print(f"  ✅ 已转换: [cyan]{stats['converted']}[/cyan] 篇")
+    console.print(f"  ⏭  已跳过: [dim]{stats['skipped']}[/dim] 篇")
+    if stats["errors"]:
+        console.print(f"  ❌ 失败: [red]{stats['errors']}[/red] 篇")
+    console.print(f"\n  📁 输出目录: {output_dir.resolve()}")
+    console.print(f"  🔗 索引页: {output_dir.resolve() / 'index.html'}")
+
+
+# ========================================================================
+# sync-check 命令
+# ========================================================================
+
+@app.command("sync-check")
+def sync_check(
+    token: Optional[str] = typer.Option(
+        None, "--token", "-t",
+        help="直接传入 Bearer token（跳过缓存检查）",
+    ),
+) -> None:
+    """🔄 同步检测 — 对比本地缓存与服务端，查看有多少新笔记待下载"""
+    import httpx as _httpx
+    from getnotes_cli.cache import CacheManager
+    from getnotes_cli.config import NOTES_API_URL
+
+    auth = _get_auth(token)
+
+    console.print("\n[bold]🔄 正在检测同步状态...[/bold]\n")
+
+    # 查询服务端总数（只拉取第一页）
+    try:
+        client = _httpx.Client(timeout=30)
+        params = {"limit": 1, "since_id": "", "sort": "create_desc"}
+        resp = client.get(NOTES_API_URL, headers=auth.get_headers(), params=params, timeout=30)
+        if resp.status_code == 401:
+            console.print("[red]✗[/red] Token 已过期，请重新运行 `getnotes login`")
+            raise typer.Exit(1)
+        resp.raise_for_status()
+        data = resp.json()
+        server_total = data.get("c", {}).get("total_items", None)
+    except Exception as e:
+        console.print(f"[red]✗[/red] 无法获取服务端数据: {e}")
+        raise typer.Exit(1)
+    finally:
+        client.close()
+
+    # 查询本地缓存数
+    output_dir = Path(resolve_output(None, str(DEFAULT_OUTPUT_DIR)))
+    cache = CacheManager(output_dir)
+    cache_info = cache.check()
+    local_count = cache_info["count"]
+
+    console.print("[bold]📊 同步状态[/bold]\n")
+    console.print(f"  ☁️  服务端笔记总数: [cyan]{server_total if server_total is not None else '未知'}[/cyan]")
+    console.print(f"  💾 本地已缓存笔记: [cyan]{local_count}[/cyan]")
+
+    if server_total is not None:
+        diff = server_total - local_count
+        if diff > 0:
+            console.print(f"\n  [yellow]⚠️  有 {diff} 条新笔记待下载！[/yellow]")
+            console.print(f"  [dim]运行 `getnotes download --all` 同步全部笔记[/dim]")
+        elif diff == 0:
+            console.print("\n  [green]✓ 本地笔记已是最新，无需同步。[/green]")
+        else:
+            console.print(f"\n  [dim]本地缓存比服务端多 {abs(diff)} 条（可能有笔记已在服务端删除）[/dim]")
+
 
 
 def main():

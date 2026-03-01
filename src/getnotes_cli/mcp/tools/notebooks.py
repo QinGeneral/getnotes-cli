@@ -7,7 +7,7 @@ from getnotes_cli.config import DEFAULT_OUTPUT_DIR
 from getnotes_cli.notebook import fetch_notebooks, fetch_subscribed_notebooks
 from getnotes_cli.notebook_downloader import NotebookDownloader
 
-__all__ = ["list_notebooks", "list_subscribed_notebooks", "download_notebook", "download_subscribed_notebook"]
+__all__ = ["list_notebooks", "list_subscribed_notebooks", "download_notebook", "download_subscribed_notebook", "add_note_to_notebook"]
 
 def list_notebooks() -> str:
     """List all knowledge bases (notebooks) created by the user.
@@ -146,3 +146,47 @@ def download_subscribed_notebook(notebook_id: str, force: bool = False) -> str:
         )
     except Exception as e:
         return f"Error downloading subscribed notebook: {e}"
+
+def add_note_to_notebook(note_id: str, notebook_id: str) -> str:
+    """Add an existing note to a specific notebook (knowledge base).
+
+    Args:
+        note_id: The note ID to add (from search_notes or download_notes results).
+        notebook_id: The notebook ID alias (from list_notebooks results).
+
+    Returns:
+        A success or error message.
+    """
+    try:
+        auth = get_or_refresh_token()
+    except Exception as e:
+        return f"Error: Authentication failed. Please run 'getnotes login' in your terminal. ({e})"
+
+    try:
+        notebooks = fetch_notebooks(auth)
+        target = next((nb for nb in notebooks if nb.get("id_alias") == notebook_id), None)
+
+        if not target:
+            return (
+                f"Error: Notebook with ID '{notebook_id}' not found.\n"
+                f"Use list_notebooks() to get valid notebook IDs."
+            )
+
+        topic_id = target.get("id")
+        root_dir = target.get("root_dir", {})
+        directory_id = root_dir.get("id")
+
+        if not topic_id or not directory_id:
+            return f"Error: Could not retrieve topic_id or directory_id for notebook '{notebook_id}'."
+
+        from getnotes_cli.notebook import add_note_to_notebook as _api_add
+        result = _api_add(auth, note_id, topic_id, directory_id)
+
+        header = result.get("h", {})
+        if header.get("c") == 0:
+            nb_name = target.get("name", notebook_id)
+            return f"Successfully added note '{note_id}' to notebook '{nb_name}'."
+        else:
+            return f"API returned an unexpected response: {result}"
+    except Exception as e:
+        return f"Error adding note to notebook: {e}"

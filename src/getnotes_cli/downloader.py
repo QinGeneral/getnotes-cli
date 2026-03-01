@@ -124,8 +124,12 @@ class NoteDownloader:
         except KeyboardInterrupt:
             logger.info("⚠️  用户中断下载。")
         except httpx.HTTPStatusError as e:
-            logger.error("❌ HTTP 错误: %s", e)
-            logger.info("💡 可能需要重新登录: getnotes login")
+            if e.response.status_code == 401:
+                logger.error("❌ Token 已过期或无效 (HTTP 401)")
+                logger.info("💡 请重新运行 `getnotes login` 登录以获取新 Token")
+            else:
+                logger.error("❌ HTTP 错误: %s", e)
+                logger.info("💡 可能需要重新登录: getnotes login")
         except Exception as e:
             logger.error("❌ 意外错误: %s", e)
             raise
@@ -308,8 +312,20 @@ class NoteDownloader:
         logger.info("=" * 60)
 
     def _generate_index(self, total_items) -> None:
-        """生成索引文件"""
+        """生成索引文件（优先使用缓存清单，无需依赖 note.json）"""
         index_path = self.output_dir / "INDEX.md"
+
+        # 建立 folder_name → (note_id, title, created_at) 的映射（来自缓存）
+        cache_by_folder: dict[str, dict] = {}
+        for nid, info in self.cache.manifest.items():
+            fn = info.get("folder_name", "")
+            if fn:
+                cache_by_folder[fn] = {
+                    "note_id": nid,
+                    "title": info.get("title", "(无标题)"),
+                    "created_at": info.get("created_at", ""),
+                }
+
         with open(index_path, "w", encoding="utf-8") as f:
             f.write("# Get笔记 导出索引\n\n")
             f.write(f"- 导出时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -317,22 +333,35 @@ class NoteDownloader:
             f.write(f"- 服务端总数: {total_items}\n")
             f.write(f"- 新增: {self.stats['new']} | 更新: {self.stats['updated']} | 缓存跳过: {self.stats['cached']}\n\n")
             f.write("## 笔记列表\n\n")
-            f.write("| # | 笔记 ID | 文件夹 |\n")
-            f.write("|---|---------|--------|\n")
+            f.write("| # | 标题 | 创建时间 | 文件夹 |\n")
+            f.write("|---|------|----------|--------|\n")
 
             notes_dir = self.output_dir / "notes"
             if notes_dir.exists():
-                for i, folder in enumerate(sorted(notes_dir.iterdir())):
-                    if folder.is_dir():
+                folders = sorted(
+                    (d for d in notes_dir.iterdir() if d.is_dir()),
+                    reverse=True,  # 时间降序
+                )
+                for i, folder in enumerate(folders, 1):
+                    md_file = folder / "note.md"
+                    if not md_file.exists():
+                        continue
+                    cache_info = cache_by_folder.get(folder.name)
+                    if cache_info:
+                        nid = cache_info["note_id"]
+                        title = cache_info["title"] or "(无标题)"
+                        created = cache_info["created_at"][:10] if cache_info["created_at"] else ""
+                    else:
+                        # 回退：尝试读 note.json
                         json_file = folder / "note.json"
-                        md_file = folder / "note.md"
                         if json_file.exists():
                             try:
                                 nd = json.loads(json_file.read_text(encoding="utf-8"))
                                 nid = nd.get("note_id", "")
                                 title = nd.get("title", "(无标题)")
-                                f.write(f"| {i + 1} | `{nid}` | [{title}](notes/{folder.name}/note.md) |\n")
+                                created = nd.get("created_at", "")[:10]
                             except Exception:
-                                f.write(f"| {i + 1} | - | [{folder.name}](notes/{folder.name}/note.md) |\n")
-                        elif md_file.exists():
-                            f.write(f"| {i + 1} | - | [{folder.name}](notes/{folder.name}/note.md) |\n")
+                                nid, title, created = "", folder.name, ""
+                        else:
+                            nid, title, created = "", folder.name, ""
+                    f.write(f"| {i} | [{title}](notes/{folder.name}/note.md) | {created} | `{folder.name}` |\n")

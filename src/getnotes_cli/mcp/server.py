@@ -17,14 +17,23 @@ mcp = FastMCP(
     instructions="""GetNotes MCP - Manage "Get 笔记" notes.
 
 Tools available:
-- download_notes(limit=10): Download recent notes as Markdown
-- create_note(content): Create a new note from text content
-- create_link_note(url): Use AI to create a deep note from a link URL
-- search_notes(query): Search notes by keyword and return matching results
-- list_notebooks(): Get a list of the user's notebooks
-- download_notebook(notebook_id): Download a specific notebook
+- download_notes(limit=10): Download recent notes as Markdown files.
+- create_note(content): Create a new note from text content.
+- create_link_note(url): Use AI to create a deep note from a link URL.
+- search_notes(query): Search notes by keyword and return matching results with full content.
+- read_note(note_id): Read the full Markdown content of a specific note by its ID.
+- list_notebooks(): Get a list of the user's notebooks with IDs.
+- download_notebook(notebook_id): Download a specific notebook.
+- list_subscribed_notebooks(): List subscribed notebooks.
+- download_subscribed_notebook(notebook_id): Download a subscribed notebook.
+- add_note_to_notebook(note_id, notebook_id): Add an existing note to a notebook.
 
-Auth details: The auth is handled by the `getnotes-cli`. Users must run `getnotes login` in their terminal before the MCP server can execute operations on their behalf. Alternatively they can provide a token if prompted.
+Recommended workflow:
+1. Use search_notes() to find notes by keyword.
+2. Use read_note(note_id) to read the full content of a specific note.
+3. Use add_note_to_notebook() to organize notes into knowledge bases.
+
+Auth details: The auth is handled by the `getnotes-cli`. Users must run `getnotes login` in their terminal before the MCP server can execute operations on their behalf.
 """,
 )
 

@@ -11,7 +11,7 @@ from getnotes_cli.downloader import NoteDownloader
 from getnotes_cli.searcher import NoteSearcher
 
 # We will export the functions that should be registered
-__all__ = ["download_notes", "create_note", "create_link_note", "search_notes"]
+__all__ = ["download_notes", "create_note", "create_link_note", "search_notes", "read_note"]
 
 def download_notes(limit: int = 10, force: bool = False) -> str:
     """Download the most recent notes to the default output directory.
@@ -189,3 +189,67 @@ def search_notes(query: str, page: int = 1, page_size: int = 10) -> str:
     
     return json.dumps(response, ensure_ascii=False, indent=2)
 
+
+def read_note(note_id: str) -> str:
+    """Read the full content of a specific note by its ID.
+
+    First looks in local downloaded files (using the cache manifest).
+    Falls back to searching if the note isn't found locally.
+
+    Args:
+        note_id: The unique note ID (e.g. from search_notes results).
+
+    Returns:
+        The full Markdown content of the note, or an error message.
+    """
+    from getnotes_cli.cache import CacheManager
+
+    cache = CacheManager(DEFAULT_OUTPUT_DIR)
+    cache.load()
+
+    info = cache.get(note_id)
+    if info:
+        folder_name = info.get("folder_name", "")
+        if folder_name:
+            md_file = DEFAULT_OUTPUT_DIR / "notes" / folder_name / "note.md"
+            if md_file.exists():
+                return md_file.read_text(encoding="utf-8")
+
+    # 未在本地找到，尝试通过搜索 API 获取内容
+    try:
+        auth = get_or_refresh_token()
+    except Exception as e:
+        return f"Error: Authentication failed. Please run 'getnotes login'. ({e})"
+
+    from getnotes_cli.searcher import NoteSearcher
+    searcher = NoteSearcher(auth)
+
+    try:
+        result = searcher.search(note_id, page=1, page_size=5)
+        for item in result.get("items", []):
+            if item.get("note_id") == note_id:
+                title = NoteSearcher.strip_highlight(item.get("title", "")).strip()
+                content = NoteSearcher.strip_highlight(item.get("content", "")).strip()
+                ref_content = NoteSearcher.strip_highlight(item.get("ref_content", "")).strip()
+                tags = [
+                    NoteSearcher.strip_highlight(t.get("name", ""))
+                    for t in item.get("tags", []) if t.get("type") != "system"
+                ]
+                parts = []
+                if title:
+                    parts.append(f"# {title}\n")
+                parts.append(f"**ID**: `{note_id}`")
+                parts.append(f"**创建时间**: {item.get('created_at', '')}")
+                if tags:
+                    parts.append(f"**标签**: {', '.join(tags)}")
+                if content:
+                    parts.append(f"\n## 内容\n\n{content}")
+                if ref_content:
+                    parts.append(f"\n## 引用内容\n\n> {ref_content}")
+                return "\n\n".join(parts)
+        return (
+            f"Note with ID '{note_id}' not found locally or via search.\n"
+            f"Try running: getnotes download  to sync notes first."
+        )
+    except Exception as e:
+        return f"Error reading note: {e}"

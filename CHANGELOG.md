@@ -5,6 +5,11 @@
 此文件的格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并且本项目遵循 [语义化版本规范 (Semantic Versioning)](https://semver.org/spec/v2.0.0.html)。
 
+## [0.2.2] - 2026-03-01
+
+### 新增 (Added)
+- **获取最新笔记工具**：新增 `get_recent_notes(limit=10)` MCP 工具，支持直接从云端获取最新笔记的标题和正文内容，无需下载到本地。
+
 ## [0.2.1] - 2026-03-01
 
 ### 修复 (Fixed)

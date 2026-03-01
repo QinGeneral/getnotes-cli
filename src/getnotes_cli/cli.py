@@ -1014,38 +1014,119 @@ def main_callback(
 def export(
     output: Optional[str] = typer.Option(
         None, "--output", "-o",
-        help="HTML 输出目录（默认在笔记导出目录下的 html_export/）",
+        help="输出目录（默认在笔记根目录下的 html_export/ 或 pdf_export/）",
     ),
     source: Optional[str] = typer.Option(
         None, "--source", "-s",
-        help="笔记源目录（默认使用配置的 output 目录）",
+        help=(
+            "来源路径，支持三种形式：\n"
+            "  1) 单个 .md 文件 → 只转换该文件\n"
+            "  2) notes/ 目录 → 批量转换目录内所有笔记\n"
+            "  3) 根导出目录（含 notes/ 子目录）→ 自动定位并批量转换\n"
+            "  （默认使用配置的 output 根目录）"
+        ),
+    ),
+    fmt: str = typer.Option(
+        "html", "--format", "-F",
+        help="导出格式：html（默认）或 pdf",
     ),
     force: bool = typer.Option(
         False, "--force", "-f",
-        help="强制重新转换，忽略已有 HTML 文件",
+        help="强制重新转换，忽略已有输出文件",
     ),
 ) -> None:
-    """🌐 导出笔记 — 将本地 Markdown 笔记批量转换为 HTML 格式"""
-    from getnotes_cli.exporter import export_notes_to_html
+    """🌐 导出笔记 — 将本地 Markdown 笔记批量转换为 HTML 或 PDF 格式"""
+    fmt_lower = fmt.lower()
+    if fmt_lower not in ("html", "pdf"):
+        console.print(f"[red]✗[/red] 不支持的格式: {fmt}，请使用 html 或 pdf")
+        raise typer.Exit(1)
 
-    source_dir = Path(resolve_output(source, str(DEFAULT_OUTPUT_DIR)))
-    notes_dir = source_dir / "notes"
+    is_pdf = fmt_lower == "pdf"
+    fmt_label = "PDF" if is_pdf else "HTML"
+    default_subdir = "pdf_export" if is_pdf else "html_export"
+    icon = "📄" if is_pdf else "🌐"
+
+    if is_pdf:
+        from getnotes_cli.exporter import convert_md_to_pdf, export_notes_to_pdf
+    else:
+        from getnotes_cli.exporter import convert_md_to_html, export_notes_to_html
+
+    console.print(f"\n[bold]{icon} 正在导出 Markdown 笔记为 {fmt_label}...[/bold]")
+
+    # ── 解析 source 路径 ──────────────────────────────────────────────────
+    if source:
+        source_path = Path(source).expanduser().resolve()
+    else:
+        source_path = Path(resolve_output(None, str(DEFAULT_OUTPUT_DIR))).resolve()
+
+    # 情形 1：source 是单个 .md 文件
+    if source_path.is_file() and source_path.suffix == ".md":
+        if is_pdf:
+            suffix = ".pdf"
+            _convert = convert_md_to_pdf
+        else:
+            suffix = ".html"
+            _convert = convert_md_to_html
+
+        if output:
+            out_file = Path(output).expanduser().resolve()
+            if out_file.is_dir():
+                out_file = out_file / source_path.with_suffix(suffix).name
+        else:
+            out_file = source_path.with_suffix(suffix)
+
+        console.print(f"  源文件: {source_path}")
+        console.print(f"  输出文件: {out_file}\n")
+
+        try:
+            _convert(source_path, out_file)
+            console.print(f"[green]✓[/green] 已转换: {out_file.resolve()}")
+        except ImportError as e:
+            console.print(f"[red]✗[/red] 缺少依赖: {e}")
+            console.print("[dim]请运行: pip install reportlab[/dim]")
+            raise typer.Exit(1)
+        except Exception as e:
+            console.print(f"[red]✗[/red] 转换失败: {e}")
+            raise typer.Exit(1)
+        return
+
+    # 情形 2 & 3：source 是目录
+    if not source_path.exists():
+        console.print(f"[red]✗[/red] 路径不存在: {source_path}")
+        raise typer.Exit(1)
+
+    # 如果目录内直接包含 note.md（即本身就是 notes/ 层级），直接用
+    # 否则尝试 source_path/notes/ 子目录
+    notes_subdir = source_path / "notes"
+    if notes_subdir.is_dir():
+        notes_dir = notes_subdir
+        default_out_root = source_path
+    else:
+        notes_dir = source_path
+        default_out_root = source_path.parent
 
     if output:
-        output_dir = Path(output).expanduser()
+        output_dir = Path(output).expanduser().resolve()
     else:
-        output_dir = source_dir / "html_export"
+        output_dir = default_out_root / default_subdir
 
-    console.print(f"\n[bold]🌐 正在导出 Markdown 笔记为 HTML...[/bold]")
     console.print(f"  源目录: {notes_dir}")
     console.print(f"  输出目录: {output_dir}\n")
 
     if not notes_dir.exists():
         console.print(f"[red]✗[/red] 笔记目录不存在: {notes_dir}")
-        console.print("[dim]请先运行 `getnotes download` 下载笔记。[/dim]")
+        console.print("[dim]请先运行 `getnotes download` 下载笔记，或用 -s 指定正确路径。[/dim]")
         raise typer.Exit(1)
 
-    stats = export_notes_to_html(notes_dir, output_dir, force=force)
+    try:
+        if is_pdf:
+            stats = export_notes_to_pdf(notes_dir, output_dir, force=force)
+        else:
+            stats = export_notes_to_html(notes_dir, output_dir, force=force)
+    except ImportError as e:
+        console.print(f"[red]✗[/red] 缺少依赖: {e}")
+        console.print("[dim]请运行: pip install reportlab[/dim]")
+        raise typer.Exit(1)
 
     console.print(f"\n[bold]📊 导出完成[/bold]")
     console.print(f"  ✅ 已转换: [cyan]{stats['converted']}[/cyan] 篇")
@@ -1053,7 +1134,10 @@ def export(
     if stats["errors"]:
         console.print(f"  ❌ 失败: [red]{stats['errors']}[/red] 篇")
     console.print(f"\n  📁 输出目录: {output_dir.resolve()}")
-    console.print(f"  🔗 索引页: {output_dir.resolve() / 'index.html'}")
+    if is_pdf:
+        console.print(f"  📄 已在 {output_dir.resolve()} 生成 PDF 文件")
+    elif (output_dir / "index.html").exists() or stats["converted"] > 0:
+        console.print(f"  🔗 索引页: {output_dir.resolve() / 'index.html'}")
 
 
 # ========================================================================

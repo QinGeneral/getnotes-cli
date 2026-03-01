@@ -5,13 +5,14 @@ import tempfile
 from pathlib import Path
 
 from getnotes_cli.auth import get_or_refresh_token
-from getnotes_cli.config import DEFAULT_OUTPUT_DIR
+from getnotes_cli.config import DEFAULT_OUTPUT_DIR, NOTES_API_URL
 from getnotes_cli.creator import NoteCreator
 from getnotes_cli.downloader import NoteDownloader
 from getnotes_cli.searcher import NoteSearcher
+import httpx
 
 # We will export the functions that should be registered
-__all__ = ["download_notes", "create_note", "create_link_note", "search_notes", "read_note"]
+__all__ = ["download_notes", "create_note", "create_link_note", "search_notes", "read_note", "get_recent_notes"]
 
 def download_notes(limit: int = 10, force: bool = False) -> str:
     """Download the most recent notes to the default output directory.
@@ -50,6 +51,69 @@ def download_notes(limit: int = 10, force: bool = False) -> str:
         )
     except Exception as e:
         return f"Error downloading notes: {e}"
+
+def get_recent_notes(limit: int = 10) -> str:
+    """Fetch the most recent notes directly from the cloud without downloading to local disk.
+    
+    Args:
+        limit: Number of recent notes to fetch (default: 10). Maximum is 100.
+        
+    Returns:
+        A JSON string containing the recent notes' metadata and content.
+    """
+    if limit > 100:
+        limit = 100
+        
+    try:
+        auth = get_or_refresh_token()
+    except Exception as e:
+        return f"Error: Authentication failed. Please run 'getnotes login' in your terminal. ({e})"
+        
+    try:
+        params = {
+            "limit": limit,
+            "since_id": "",
+            "sort": "create_desc",
+        }
+        headers = auth.get_headers()
+        with httpx.Client(timeout=30) as client:
+            resp = client.get(NOTES_API_URL, headers=headers, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+            
+        content = data.get("c", {})
+        notes_list = content.get("list", [])
+        
+        notes = []
+        for item in notes_list:
+            # Clean title
+            title = item.get("title", "").strip()
+            
+            # Extract content
+            note_content = item.get("content", "").strip()
+            ref_content = item.get("ref_content", "").strip()
+            
+            # Clean tags
+            tags = [
+                t.get("name", "")
+                for t in item.get("tags", [])
+                if t.get("type") != "system"
+            ]
+            
+            note_data = {
+                "note_id": item.get("note_id", item.get("id", "")),
+                "title": title,
+                "note_type": item.get("note_type", ""),
+                "content": note_content,
+                "ref_content": ref_content,
+                "tags": tags,
+                "created_at": item.get("created_at", ""),
+            }
+            notes.append(note_data)
+            
+        return json.dumps({"notes": notes, "fetched_count": len(notes)}, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return f"Error fetching recent notes: {e}"
 
 def create_note(content: str) -> str:
     """Create a new 'Get 笔记' note from text or markdown content.

@@ -17,6 +17,7 @@ mcp = FastMCP(
     instructions="""GetNotes MCP - Manage "Get 笔记" notes.
 
 Tools available:
+- get_recent_notes(limit=10): Fetch recent notes' metadata and content directly without saving to disk.
 - download_notes(limit=10): Download recent notes as Markdown files.
 - create_note(content): Create a new note from text content.
 - create_link_note(url): Use AI to create a deep note from a link URL.

@@ -5,6 +5,11 @@
 此文件的格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并且本项目遵循 [语义化版本规范 (Semantic Versioning)](https://semver.org/spec/v2.0.0.html)。
 
+## [0.2.1] - 2026-03-01
+
+### 修复 (Fixed)
+- **PDF 导出字体渲染**：修复了在 PDF 导出过程中，位于行内代码（inline code）或加粗/斜体标记中的中文字符会显示为“黑块”的字体渲染问题。
+
 ## [0.2.0] - 2026-03-01
 
 ### 新增 (Added)

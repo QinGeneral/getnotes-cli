@@ -35,36 +35,39 @@ app = typer.Typer(
 
 @app.command()
 def login(
-    token: Optional[str] = typer.Option(
-        None, "--token", "-t",
-        help="手动输入 Bearer token（跳过浏览器登录）",
+    api_key: Optional[str] = typer.Option(
+        None, "--api-key", "-k",
+        help="Get 笔记 OpenAPI API Key（gk_live_xxx）",
+    ),
+    client_id: Optional[str] = typer.Option(
+        None, "--client-id", "-c",
+        help="Get 笔记 OpenAPI Client ID（cli_xxx）",
+    ),
+    legacy_token: Optional[str] = typer.Option(
+        None, "--legacy-token",
+        help="保存 legacy Bearer token，仅用于 download-tree 等 legacy-only 命令",
     ),
 ) -> None:
-    """🔐 登录得到笔记 — 通过浏览器自动获取 token"""
-    from getnotes_cli.auth import get_or_refresh_token, login_with_token
+    """🔐 配置 Get 笔记 OpenAPI 凭证"""
+    from getnotes_cli.auth import login_with_api_key, login_with_token
 
-    if token:
-        # 手动输入 token
-        auth = login_with_token(token)
-        console.print(f"\n[green]✓[/green] Token 已保存！")
+    if legacy_token:
+        auth = login_with_token(legacy_token)
+        console.print("\n[green]✓[/green] Legacy token 已保存！")
         console.print(f"  Authorization: {auth.authorization[:50]}...")
+        console.print("  仅用于 `download-tree` 等官方 OpenAPI 未覆盖的能力。")
         return
 
-    # 自动浏览器登录
-    console.print("[bold]🌐 启动浏览器登录...[/bold]")
-    console.print("[dim]将打开 Chrome 并导航到得到笔记页面。[/dim]")
-    console.print("[dim]请在浏览器中登录，登录后浏览笔记时 token 将自动捕获。[/dim]\n")
+    if not api_key:
+        api_key = typer.prompt("OpenAPI API Key")
+    if not client_id:
+        client_id = typer.prompt("OpenAPI Client ID")
 
-    try:
-        auth = get_or_refresh_token(force_login=True)
-        console.print(f"\n[green]✓[/green] 登录成功！")
-        console.print(f"  Authorization: {auth.authorization[:50]}...")
-        if auth.csrf_token:
-            console.print(f"  CSRF Token: {auth.csrf_token[:20]}...")
-        console.print(f"  Token 已缓存到: ~/.getnotes-cli/auth.json")
-    except RuntimeError as e:
-        console.print(f"\n[red]✗[/red] {e}")
-        raise typer.Exit(1)
+    auth = login_with_api_key(api_key, client_id)
+    console.print("\n[green]✓[/green] OpenAPI 凭证已保存！")
+    console.print(f"  API Key: {auth.api_key[:12]}...")
+    console.print(f"  Client ID: {auth.client_id}")
+    console.print("  凭证已缓存到: ~/.getnotes-cli/auth.json")
 
 
 # ========================================================================
@@ -85,24 +88,14 @@ def create(
         help="要上传并插入的图片文件（可多次指定），将追加到文本末尾",
     ),
     token: Optional[str] = typer.Option(
-        None, "--token", "-t",
-        help="直接传入 Bearer token（跳过缓存检查）",
+        None, "--api-key", "--token", "-t",
+        help="直接传入 OpenAPI API Key（Client ID 仍从配置或环境读取）",
     ),
 ) -> None:
     """📝 创建笔记 — 从本地文件与图片发布得到笔记"""
-    from getnotes_cli.auth import get_or_refresh_token, login_with_token
     from getnotes_cli.creator import NoteCreator
 
-    # 获取 token
-    if token:
-        auth = login_with_token(token)
-    else:
-        try:
-            auth = get_or_refresh_token()
-        except RuntimeError as e:
-            console.print(f"\n[red]✗[/red] {e}")
-            console.print("[dim]请先运行 `getnotes login` 登录。[/dim]")
-            raise typer.Exit(1)
+    auth = _get_auth(token)
 
     text = file.read_text(encoding="utf-8")
     creator = NoteCreator(auth)
@@ -128,25 +121,14 @@ def create_link(
         help="要生成笔记的链接地址"
     ),
     token: Optional[str] = typer.Option(
-        None, "--token", "-t",
-        help="直接传入 Bearer token（跳过缓存检查）",
+        None, "--api-key", "--token", "-t",
+        help="直接传入 OpenAPI API Key（Client ID 仍从配置或环境读取）",
     ),
 ) -> None:
     """🔗 通过链接创建笔记 — 使用 AI 分析链接内容并生成深度笔记"""
-    from getnotes_cli.auth import get_or_refresh_token, login_with_token
     from getnotes_cli.creator import NoteCreator
-    import json
 
-    # 获取 token
-    if token:
-        auth = login_with_token(token)
-    else:
-        try:
-            auth = get_or_refresh_token()
-        except RuntimeError as e:
-            console.print(f"\n[red]✗[/red] {e}")
-            console.print("[dim]请先运行 `getnotes login` 登录。[/dim]")
-            raise typer.Exit(1)
+    auth = _get_auth(token)
 
     creator = NoteCreator(auth)
 
@@ -154,31 +136,13 @@ def create_link(
     console.print(f"[dim]链接: {url}[/dim]\n")
 
     try:
-        events = creator.create_note_from_link(url)
-        console.print("[cyan]AI 解析中...[/cyan]")
-        note_id = None
-        for data in events:
-            msg_type = data.get("msg_type")
-            inner_data = data.get("data", {})
-            if msg_type == -1 and "note_id" in inner_data:
-                note_id = inner_data["note_id"]
-            elif msg_type == 1:
-                msg_str = inner_data.get("msg", "{}")
-                try:
-                    msg_json = json.loads(msg_str)
-                    if "content" in msg_json:
-                        console.print(msg_json["content"], end="")
-                    elif "summary_title" in msg_json:
-                        console.print(msg_json["summary_title"], end="")
-                    elif "instruction" in msg_json:
-                         console.print(msg_json["instruction"], end="")
-                except json.JSONDecodeError:
-                    pass
-
-        console.print()
+        data = creator.create_note_from_link(url)
+        note_id = data.get("note_id")
         console.print(f"\n[green]✓[/green] 笔记创建成功！")
         if note_id:
             console.print(f"  ID: {note_id}")
+        elif data.get("tasks"):
+            console.print(f"  任务: {data['tasks'][0].get('task_id', '')}")
     except Exception as e:
         console.print(f"\n[red]✗[/red] 创建失败: {e}")
         raise typer.Exit(1)
@@ -204,8 +168,8 @@ def search(
         help="每页数量（默认 10）",
     ),
     token: Optional[str] = typer.Option(
-        None, "--token", "-t",
-        help="直接传入 Bearer token（跳过缓存检查）",
+        None, "--api-key", "--token", "-t",
+        help="直接传入 OpenAPI API Key",
     ),
 ) -> None:
     """🔍 搜索笔记 — 根据关键词搜索相关笔记"""
@@ -311,24 +275,14 @@ def download(
         help="保存原始 JSON 数据等技术文件（默认仅保存 Markdown 和附件）",
     ),
     token: Optional[str] = typer.Option(
-        None, "--token", "-t",
-        help="直接传入 Bearer token（跳过缓存检查）",
+        None, "--api-key", "--token", "-t",
+        help="直接传入 OpenAPI API Key（Client ID 仍从配置或环境读取）",
     ),
 ) -> None:
     """📥 下载笔记 — 批量下载得到笔记并保存为 Markdown"""
-    from getnotes_cli.auth import AuthToken, get_or_refresh_token, login_with_token
     from getnotes_cli.downloader import NoteDownloader
 
-    # 获取 token
-    if token:
-        auth = login_with_token(token)
-    else:
-        try:
-            auth = get_or_refresh_token()
-        except RuntimeError as e:
-            console.print(f"\n[red]✗[/red] {e}")
-            console.print("[dim]请先运行 `getnotes login` 登录。[/dim]")
-            raise typer.Exit(1)
+    auth = _get_auth(token)
 
     max_notes = None if all_notes else limit
     output_dir = Path(resolve_output(output, str(DEFAULT_OUTPUT_DIR)))
@@ -421,24 +375,78 @@ notebook_app = typer.Typer(
 
 
 def _get_auth(token: str | None) -> "AuthToken":
-    """获取认证 token 的通用逻辑"""
-    from getnotes_cli.auth import AuthToken, get_or_refresh_token, login_with_token
+    """获取官方 OpenAPI 凭证的通用逻辑"""
+    from getnotes_cli.auth import AuthToken, get_or_refresh_token, login_with_api_key, load_cached_token
 
     if token:
-        return login_with_token(token)
+        cached = load_cached_token()
+        if not cached or not cached.is_openapi:
+            try:
+                cached = get_or_refresh_token()
+            except RuntimeError as e:
+                console.print(f"\n[red]✗[/red] {e}")
+                console.print("[dim]直接传 API Key 时仍需要已配置 Client ID 或设置 GETNOTE_CLIENT_ID。[/dim]")
+                raise typer.Exit(1)
+        return AuthToken(api_key=token, client_id=cached.client_id)
     try:
         return get_or_refresh_token()
     except RuntimeError as e:
         console.print(f"\n[red]✗[/red] {e}")
-        console.print("[dim]请先运行 `getnotes login` 登录。[/dim]")
+        console.print("[dim]请先运行 `getnotes login --api-key <key> --client-id <id>`。[/dim]")
         raise typer.Exit(1)
+
+
+def _get_legacy_auth() -> "AuthToken":
+    """获取 legacy-only 命令需要的 Bearer token。"""
+    from getnotes_cli.auth import get_or_refresh_legacy_token
+
+    try:
+        return get_or_refresh_legacy_token()
+    except RuntimeError as e:
+        console.print(f"\n[red]✗[/red] {e}")
+        console.print("[dim]可运行 `getnotes login --legacy-token <Bearer token>`，或让命令自动打开浏览器捕获 token。[/dim]")
+        raise typer.Exit(1)
+
+
+def _match_notebook(
+    notebooks: list[dict],
+    *,
+    name: str | None,
+    nb_id: str | None,
+    label: str,
+) -> dict:
+    """按 ID 或名称匹配知识库，失败时直接退出 CLI。"""
+    if nb_id:
+        target = next(
+            (
+                nb for nb in notebooks
+                if str(nb.get("id_alias") or nb.get("topic_id") or nb.get("id")) == nb_id
+            ),
+            None,
+        )
+        if not target:
+            console.print(f"[red]✗[/red] 未找到 ID 为 '{nb_id}' 的{label}")
+            raise typer.Exit(1)
+        return target
+
+    matches = [nb for nb in notebooks if name and name.lower() in nb.get("name", "").lower()]
+    if not matches:
+        console.print(f"[red]✗[/red] 未找到名称包含 '{name}' 的{label}")
+        raise typer.Exit(1)
+    if len(matches) > 1:
+        console.print(f"[yellow]⚠[/yellow] 找到 {len(matches)} 个匹配:")
+        for nb in matches:
+            console.print(f"  - {nb.get('name', '')} (ID: {nb.get('id_alias', nb.get('topic_id', ''))})")
+        console.print("[dim]请使用 --id 精确指定[/dim]")
+        raise typer.Exit(1)
+    return matches[0]
 
 
 @notebook_app.command("list")
 def notebook_list(
     token: Optional[str] = typer.Option(
-        None, "--token", "-t",
-        help="直接传入 Bearer token",
+        None, "--api-key", "--token", "-t",
+        help="直接传入 OpenAPI API Key",
     ),
 ) -> None:
     """📋 列出所有知识库"""
@@ -503,13 +511,13 @@ def notebook_download(
         help="保存原始 JSON 数据等技术文件（默认仅保存 Markdown 和附件）",
     ),
     token: Optional[str] = typer.Option(
-        None, "--token", "-t",
-        help="直接传入 Bearer token",
+        None, "--api-key", "--token", "-t",
+        help="直接传入 OpenAPI API Key",
     ),
 ) -> None:
     """📥 下载指定知识库的笔记"""
     from getnotes_cli.notebook import fetch_notebooks
-    from getnotes_cli.notebook_downloader import NotebookDownloader
+    from getnotes_cli.openapi_notebook_downloader import OpenAPINotebookDownloader
 
     if not name and not nb_id:
         console.print("[red]✗[/red] 请指定 --name 或 --id")
@@ -547,7 +555,7 @@ def notebook_download(
 
     console.print(f"[green]✓[/green] 目标知识库: {target.get('name', '')}")
 
-    downloader = NotebookDownloader(
+    downloader = OpenAPINotebookDownloader(
         token=auth,
         output_dir=Path(resolve_output(output, str(DEFAULT_OUTPUT_DIR))),
         delay=resolve_delay(delay, REQUEST_DELAY),
@@ -576,13 +584,13 @@ def notebook_download_all(
         help="保存原始 JSON 数据等技术文件（默认仅保存 Markdown 和附件）",
     ),
     token: Optional[str] = typer.Option(
-        None, "--token", "-t",
-        help="直接传入 Bearer token",
+        None, "--api-key", "--token", "-t",
+        help="直接传入 OpenAPI API Key",
     ),
 ) -> None:
     """📥 下载所有知识库的笔记"""
     from getnotes_cli.notebook import fetch_notebooks
-    from getnotes_cli.notebook_downloader import NotebookDownloader
+    from getnotes_cli.openapi_notebook_downloader import OpenAPINotebookDownloader
 
     auth = _get_auth(token)
 
@@ -602,7 +610,7 @@ def notebook_download_all(
     if not typer.confirm(f"\n确认下载全部 {len(notebooks)} 个知识库？"):
         raise typer.Exit()
 
-    downloader = NotebookDownloader(
+    downloader = OpenAPINotebookDownloader(
         token=auth,
         output_dir=Path(resolve_output(output, str(DEFAULT_OUTPUT_DIR))),
         delay=resolve_delay(delay, REQUEST_DELAY),
@@ -628,8 +636,8 @@ def notebook_add_note(
         help="知识库 ID (id_alias)",
     ),
     token: Optional[str] = typer.Option(
-        None, "--token", "-t",
-        help="直接传入 Bearer token",
+        None, "--api-key", "--token", "-t",
+        help="直接传入 OpenAPI API Key",
     ),
 ) -> None:
     """➕ 将笔记加入知识库"""
@@ -666,27 +674,135 @@ def notebook_add_note(
             raise typer.Exit(1)
         target = matches[0]
 
-    topic_id = target.get("id")
-    root_dir = target.get("root_dir", {})
-    directory_id = root_dir.get("id")
-
-    if not topic_id or not directory_id:
-        console.print("[red]✗[/red] 无法获取知识库的 topic_id 或 directory_id")
+    topic_id = target.get("topic_id") or target.get("id") or target.get("id_alias")
+    if not topic_id:
+        console.print("[red]✗[/red] 无法获取知识库 topic_id")
         raise typer.Exit(1)
 
     nb_name = target.get("name", "")
     console.print(f"[bold]➕ 正在将笔记加入知识库: {nb_name}[/bold]")
 
     try:
-        result = add_note_to_notebook(auth, note_id, topic_id, directory_id)
-        header = result.get("h", {})
-        if header.get("c") == 0:
-            console.print(f"\n[green]✓[/green] 笔记 `{note_id}` 已成功加入知识库 [{nb_name}]！")
-        else:
-            console.print(f"[yellow]⚠[/yellow] API 返回: {result}")
+        add_note_to_notebook(auth, note_id, topic_id)
+        console.print(f"\n[green]✓[/green] 笔记 `{note_id}` 已成功加入知识库 [{nb_name}]！")
     except Exception as e:
         console.print(f"\n[red]✗[/red] 操作失败: {e}")
         raise typer.Exit(1)
+
+
+@notebook_app.command("remove-note")
+def notebook_remove_note(
+    note_id: str = typer.Option(
+        ..., "--note-id", "-n",
+        help="要移出知识库的笔记 ID",
+    ),
+    name: Optional[str] = typer.Option(
+        None, "--name",
+        help="知识库名称（模糊匹配）",
+    ),
+    nb_id: Optional[str] = typer.Option(
+        None, "--id",
+        help="知识库 ID",
+    ),
+    token: Optional[str] = typer.Option(
+        None, "--api-key", "--token", "-t",
+        help="直接传入 OpenAPI API Key",
+    ),
+) -> None:
+    """➖ 将笔记从知识库移除"""
+    from getnotes_cli.notebook import fetch_notebooks, remove_note_from_notebook
+
+    if not name and not nb_id:
+        console.print("[red]✗[/red] 请指定 --name 或 --id")
+        raise typer.Exit(1)
+
+    auth = _get_auth(token)
+    notebooks = fetch_notebooks(auth)
+    target = _match_notebook(notebooks, name=name, nb_id=nb_id, label="知识库")
+    topic_id = target.get("topic_id") or target.get("id") or target.get("id_alias")
+    if not topic_id:
+        console.print("[red]✗[/red] 无法获取知识库 topic_id")
+        raise typer.Exit(1)
+
+    try:
+        remove_note_from_notebook(auth, note_id, topic_id)
+        console.print(f"[green]✓[/green] 笔记 `{note_id}` 已从知识库 [{target.get('name', '')}] 移除。")
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] 操作失败: {e}")
+        raise typer.Exit(1)
+
+
+@notebook_app.command("create")
+def notebook_create(
+    name: str = typer.Argument(..., help="知识库名称"),
+    description: str = typer.Option("", "--description", "-d", help="知识库描述"),
+    token: Optional[str] = typer.Option(
+        None, "--api-key", "--token", "-t",
+        help="直接传入 OpenAPI API Key",
+    ),
+) -> None:
+    """📚 创建知识库"""
+    from getnotes_cli.notebook import create_notebook
+
+    auth = _get_auth(token)
+    try:
+        notebook = create_notebook(auth, name, description)
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] 创建失败: {e}")
+        raise typer.Exit(1)
+    console.print(f"[green]✓[/green] 已创建知识库: {notebook.get('name', name)}")
+    if notebook.get("topic_id"):
+        console.print(f"  ID: {notebook['topic_id']}")
+
+
+@notebook_app.command("download-tree")
+def notebook_download_tree(
+    name: Optional[str] = typer.Option(
+        None, "--name", "-n",
+        help="知识库名称（模糊匹配）",
+    ),
+    nb_id: Optional[str] = typer.Option(
+        None, "--id",
+        help="知识库 ID (id_alias)",
+    ),
+    output: Optional[str] = typer.Option(
+        None, "--output", "-o",
+        help="输出目录（可通过 config set 持久化）",
+    ),
+    delay: Optional[float] = typer.Option(
+        None, "--delay", "-d",
+        help="请求间隔秒数（可通过 config set 持久化）",
+    ),
+    force: bool = typer.Option(
+        False, "--force", "-f",
+        help="强制重新下载，忽略已有文件",
+    ),
+    save_json: bool = typer.Option(
+        False, "--save-json", "-j",
+        help="保存原始 JSON 数据等技术文件",
+    ),
+) -> None:
+    """🌲 Legacy 下载知识库目录树和文件资源"""
+    from getnotes_cli.notebook import fetch_legacy_notebooks
+    from getnotes_cli.notebook_downloader import NotebookDownloader
+
+    if not name and not nb_id:
+        console.print("[red]✗[/red] 请指定 --name 或 --id")
+        raise typer.Exit(1)
+
+    auth = _get_legacy_auth()
+    notebooks = fetch_legacy_notebooks(auth)
+    target = _match_notebook(notebooks, name=name, nb_id=nb_id, label="legacy 知识库")
+    console.print(f"[green]✓[/green] 目标 legacy 知识库: {target.get('name', '')}")
+
+    downloader = NotebookDownloader(
+        token=auth,
+        output_dir=Path(resolve_output(output, str(DEFAULT_OUTPUT_DIR))),
+        delay=resolve_delay(delay, REQUEST_DELAY),
+        force=force,
+        save_json=save_json,
+    )
+    downloader.download_notebook(target)
 
 app.add_typer(notebook_app, name="notebook")
 
@@ -704,8 +820,8 @@ subscribe_app = typer.Typer(
 @subscribe_app.command("list")
 def subscribe_list(
     token: Optional[str] = typer.Option(
-        None, "--token", "-t",
-        help="直接传入 Bearer token",
+        None, "--api-key", "--token", "-t",
+        help="直接传入 OpenAPI API Key",
     ),
 ) -> None:
     """📋 列出所有已订阅的知识库"""
@@ -775,13 +891,13 @@ def subscribe_download(
         help="保存原始 JSON 数据等技术文件（默认仅保存 Markdown 和附件）",
     ),
     token: Optional[str] = typer.Option(
-        None, "--token", "-t",
-        help="直接传入 Bearer token",
+        None, "--api-key", "--token", "-t",
+        help="直接传入 OpenAPI API Key",
     ),
 ) -> None:
     """📥 下载指定订阅知识库的笔记"""
     from getnotes_cli.notebook import fetch_subscribed_notebooks
-    from getnotes_cli.notebook_downloader import NotebookDownloader
+    from getnotes_cli.openapi_notebook_downloader import OpenAPINotebookDownloader
 
     if not name and not nb_id:
         console.print("[red]✗[/red] 请指定 --name 或 --id")
@@ -793,31 +909,11 @@ def subscribe_download(
     console.print("\n[bold]📬 正在获取订阅知识库列表...[/bold]")
     notebooks = fetch_subscribed_notebooks(auth)
 
-    target = None
-    if nb_id:
-        target = next((nb for nb in notebooks if nb.get("id_alias") == nb_id), None)
-        if not target:
-            console.print(f"[red]✗[/red] 未找到 ID 为 '{nb_id}' 的订阅知识库")
-            raise typer.Exit(1)
-    elif name:
-        matches = [nb for nb in notebooks if name.lower() in nb.get("name", "").lower()]
-        if not matches:
-            console.print(f"[red]✗[/red] 未找到名称包含 '{name}' 的订阅知识库")
-            console.print("[dim]已订阅知识库:[/dim]")
-            for nb in notebooks:
-                console.print(f"  - {nb.get('name', '')} (by {nb.get('creator', '')})")
-            raise typer.Exit(1)
-        if len(matches) > 1:
-            console.print(f"[yellow]⚠[/yellow] 找到 {len(matches)} 个匹配:")
-            for nb in matches:
-                console.print(f"  - {nb.get('name', '')} (ID: {nb.get('id_alias', '')})")
-            console.print("[dim]请使用 --id 精确指定[/dim]")
-            raise typer.Exit(1)
-        target = matches[0]
+    target = _match_notebook(notebooks, name=name, nb_id=nb_id, label="订阅知识库")
 
     console.print(f"[green]✓[/green] 目标订阅知识库: {target.get('name', '')} (by {target.get('creator', '')})")
 
-    downloader = NotebookDownloader(
+    downloader = OpenAPINotebookDownloader(
         token=auth,
         output_dir=Path(resolve_output(output, str(DEFAULT_OUTPUT_DIR))),
         delay=resolve_delay(delay, REQUEST_DELAY),
@@ -846,13 +942,13 @@ def subscribe_download_all(
         help="保存原始 JSON 数据等技术文件（默认仅保存 Markdown 和附件）",
     ),
     token: Optional[str] = typer.Option(
-        None, "--token", "-t",
-        help="直接传入 Bearer token",
+        None, "--api-key", "--token", "-t",
+        help="直接传入 OpenAPI API Key",
     ),
 ) -> None:
     """📥 下载所有订阅知识库的笔记"""
     from getnotes_cli.notebook import fetch_subscribed_notebooks
-    from getnotes_cli.notebook_downloader import NotebookDownloader
+    from getnotes_cli.openapi_notebook_downloader import OpenAPINotebookDownloader
 
     auth = _get_auth(token)
 
@@ -873,7 +969,7 @@ def subscribe_download_all(
     if not typer.confirm(f"\n确认下载全部 {len(notebooks)} 个订阅知识库？"):
         raise typer.Exit()
 
-    downloader = NotebookDownloader(
+    downloader = OpenAPINotebookDownloader(
         token=auth,
         output_dir=Path(resolve_output(output, str(DEFAULT_OUTPUT_DIR))),
         delay=resolve_delay(delay, REQUEST_DELAY),
@@ -881,6 +977,56 @@ def subscribe_download_all(
         save_json=save_json,
     )
     downloader.download_all(notebooks)
+
+
+@subscribe_app.command("download-tree")
+def subscribe_download_tree(
+    name: Optional[str] = typer.Option(
+        None, "--name", "-n",
+        help="订阅知识库名称（模糊匹配）",
+    ),
+    nb_id: Optional[str] = typer.Option(
+        None, "--id",
+        help="订阅知识库 ID (id_alias)",
+    ),
+    output: Optional[str] = typer.Option(
+        None, "--output", "-o",
+        help="输出目录（可通过 config set 持久化）",
+    ),
+    delay: Optional[float] = typer.Option(
+        None, "--delay", "-d",
+        help="请求间隔秒数（可通过 config set 持久化）",
+    ),
+    force: bool = typer.Option(
+        False, "--force", "-f",
+        help="强制重新下载，忽略已有文件",
+    ),
+    save_json: bool = typer.Option(
+        False, "--save-json", "-j",
+        help="保存原始 JSON 数据等技术文件",
+    ),
+) -> None:
+    """🌲 Legacy 下载订阅知识库目录树和文件资源"""
+    from getnotes_cli.notebook import fetch_legacy_subscribed_notebooks
+    from getnotes_cli.notebook_downloader import NotebookDownloader
+
+    if not name and not nb_id:
+        console.print("[red]✗[/red] 请指定 --name 或 --id")
+        raise typer.Exit(1)
+
+    auth = _get_legacy_auth()
+    notebooks = fetch_legacy_subscribed_notebooks(auth)
+    target = _match_notebook(notebooks, name=name, nb_id=nb_id, label="legacy 订阅知识库")
+    console.print(f"[green]✓[/green] 目标 legacy 订阅知识库: {target.get('name', '')}")
+
+    downloader = NotebookDownloader(
+        token=auth,
+        output_dir=Path(resolve_output(output, str(DEFAULT_OUTPUT_DIR))),
+        delay=resolve_delay(delay, REQUEST_DELAY),
+        force=force,
+        save_json=save_json,
+    )
+    downloader.download_notebook(target)
 
 
 app.add_typer(subscribe_app, name="subscribe")
@@ -1147,55 +1293,56 @@ def export(
 @app.command("sync-check")
 def sync_check(
     token: Optional[str] = typer.Option(
-        None, "--token", "-t",
-        help="直接传入 Bearer token（跳过缓存检查）",
+        None, "--api-key", "--token", "-t",
+        help="直接传入 OpenAPI API Key",
     ),
 ) -> None:
     """🔄 同步检测 — 对比本地缓存与服务端，查看有多少新笔记待下载"""
-    import httpx as _httpx
     from getnotes_cli.cache import CacheManager
-    from getnotes_cli.config import NOTES_API_URL
+    from getnotes_cli.openapi_client import OpenAPIClient
 
     auth = _get_auth(token)
 
     console.print("\n[bold]🔄 正在检测同步状态...[/bold]\n")
 
-    # 查询服务端总数（只拉取第一页）
     try:
-        client = _httpx.Client(timeout=30)
-        params = {"limit": 1, "since_id": "", "sort": "create_desc"}
-        resp = client.get(NOTES_API_URL, headers=auth.get_headers(), params=params, timeout=30)
-        if resp.status_code == 401:
-            console.print("[red]✗[/red] Token 已过期，请重新运行 `getnotes login`")
-            raise typer.Exit(1)
-        resp.raise_for_status()
-        data = resp.json()
-        server_total = data.get("c", {}).get("total_items", None)
+        server_ids: set[str] = set()
+        cursor = ""
+        with OpenAPIClient(auth, min_interval=1.0) as client:
+            while True:
+                data = client.list_notes(cursor)
+                for note in data.get("notes", []) or []:
+                    note_id = str(note.get("note_id") or note.get("id") or "")
+                    if note_id:
+                        server_ids.add(note_id)
+                if not data.get("has_more"):
+                    break
+                cursor = data.get("cursor", "")
+                if not cursor:
+                    break
     except Exception as e:
         console.print(f"[red]✗[/red] 无法获取服务端数据: {e}")
         raise typer.Exit(1)
-    finally:
-        client.close()
 
     # 查询本地缓存数
     output_dir = Path(resolve_output(None, str(DEFAULT_OUTPUT_DIR)))
     cache = CacheManager(output_dir)
     cache_info = cache.check()
     local_count = cache_info["count"]
+    cached_ids = set(cache_info.get("notes", {}).keys())
+    missing_ids = server_ids - cached_ids
 
     console.print("[bold]📊 同步状态[/bold]\n")
-    console.print(f"  ☁️  服务端笔记总数: [cyan]{server_total if server_total is not None else '未知'}[/cyan]")
+    console.print(f"  ☁️  服务端笔记总数: [cyan]{len(server_ids)}[/cyan]")
     console.print(f"  💾 本地已缓存笔记: [cyan]{local_count}[/cyan]")
 
-    if server_total is not None:
-        diff = server_total - local_count
-        if diff > 0:
-            console.print(f"\n  [yellow]⚠️  有 {diff} 条新笔记待下载！[/yellow]")
-            console.print(f"  [dim]运行 `getnotes download --all` 同步全部笔记[/dim]")
-        elif diff == 0:
-            console.print("\n  [green]✓ 本地笔记已是最新，无需同步。[/green]")
-        else:
-            console.print(f"\n  [dim]本地缓存比服务端多 {abs(diff)} 条（可能有笔记已在服务端删除）[/dim]")
+    if missing_ids:
+        console.print(f"\n  [yellow]⚠️  有 {len(missing_ids)} 条新笔记待下载！[/yellow]")
+        console.print("  [dim]运行 `getnotes download --all` 同步全部笔记[/dim]")
+    elif local_count == len(server_ids):
+        console.print("\n  [green]✓ 本地笔记已是最新，无需同步。[/green]")
+    elif local_count > len(server_ids):
+        console.print(f"\n  [dim]本地缓存比服务端多 {local_count - len(server_ids)} 条（可能有笔记已在服务端删除）[/dim]")
 
 
 

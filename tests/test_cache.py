@@ -46,6 +46,24 @@ class TestCacheManagerIsCached:
         note = {"id": "n2", "version": 1, "updated_at": "2024-01-01"}
         assert mgr.is_cached(note)
 
+    def test_cached_when_content_hash_matches(self, tmp_path):
+        mgr = make_manager(tmp_path)
+        mgr._manifest["n1"] = {"content_hash": "abc", "updated_at": "old"}
+        note = {"note_id": "n1", "content_hash": "abc", "updated_at": "new"}
+        assert mgr.is_cached(note)
+
+    def test_not_cached_when_note_has_no_change_marker(self, tmp_path):
+        mgr = make_manager(tmp_path)
+        mgr._manifest["n1"] = {"version": 1, "updated_at": "2024-01-01"}
+        note = {"note_id": "n1", "title": "No markers"}
+        assert not mgr.is_cached(note)
+
+    def test_cached_when_only_updated_at_matches(self, tmp_path):
+        mgr = make_manager(tmp_path)
+        mgr._manifest["n1"] = {"updated_at": "2024-01-01"}
+        note = {"note_id": "n1", "updated_at": "2024-01-01"}
+        assert mgr.is_cached(note)
+
 
 class TestCacheManagerUpdateAndGet:
     def test_update_stores_info(self, tmp_path):

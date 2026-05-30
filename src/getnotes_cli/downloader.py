@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import time
+import hashlib
 from datetime import datetime
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from getnotes_cli.markdown import (
     note_to_markdown,
     sanitize_filename,
 )
+from getnotes_cli.openapi_client import OpenAPIClient
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,7 @@ class NoteDownloader:
         self.save_json = save_json
 
         self.client = httpx.Client(timeout=60)
+        self.api_client = OpenAPIClient(token, min_interval=max(1.0, delay))
         self.cache = CacheManager(output_dir)
         self.stats = {"new": 0, "updated": 0, "cached": 0}
         self.total_processed = 0
@@ -66,17 +69,17 @@ class NoteDownloader:
 
         self._print_banner()
 
-        since_id = ""
+        cursor = ""
         page_num = 0
         total_items = None
 
         try:
             while True:
                 page_num += 1
-                logger.info("📄 正在拉取第 %d 页 (since_id=%s) ...",
-                            page_num, since_id or "(首页)")
+                logger.info("📄 正在拉取第 %d 页 (cursor=%s) ...",
+                            page_num, cursor or "(首页)")
 
-                data = self._fetch_page(since_id)
+                data = self._fetch_page(cursor)
 
                 # 保存 API 响应
                 if self.save_json:
@@ -86,9 +89,10 @@ class NoteDownloader:
                 content = data.get("c", {})
                 notes = content.get("list", [])
                 has_more = content.get("has_more", False)
+                next_cursor = content.get("cursor", "")
 
                 if total_items is None:
-                    total_items = content.get("total_items", "?")
+                    total_items = content.get("total_items", "未知")
                     logger.info("📊 服务端笔记总数: %s", total_items)
 
                 if not notes:
@@ -118,7 +122,10 @@ class NoteDownloader:
                     logger.info("✅ 所有笔记已下载完毕！")
                     break
 
-                since_id = notes[-1].get("id", "")
+                cursor = next_cursor
+                if not cursor:
+                    logger.info("✅ 未返回下一页 cursor，停止。")
+                    break
                 time.sleep(self.delay)
 
         except KeyboardInterrupt:
@@ -135,6 +142,7 @@ class NoteDownloader:
             raise
         finally:
             self.cache.save()
+            self.api_client.close()
 
         # 生成索引
         self._generate_index(total_items)
@@ -142,30 +150,42 @@ class NoteDownloader:
 
         return self.stats
 
-    def _fetch_page(self, since_id: str = "") -> dict:
+    def _fetch_page(self, cursor: str = "") -> dict:
         """拉取一页笔记"""
-        params = {
-            "limit": self.page_size,
-            "since_id": since_id,
-            "sort": "create_desc",
+        data = self.api_client.list_notes(cursor)
+        notes = [_normalize_openapi_note(note) for note in data.get("notes", [])]
+        return {
+            "c": {
+                "list": notes,
+                "has_more": data.get("has_more", False),
+                "cursor": data.get("cursor", ""),
+                "total_items": data.get("total") or data.get("total_items") or "未知",
+            }
         }
-        headers = self.token.get_headers()
-        resp = self.client.get(NOTES_API_URL, headers=headers, params=params, timeout=30)
-        resp.raise_for_status()
-        return resp.json()
 
     def _process_note(self, note: dict) -> str:
         """处理单条笔记"""
+        note = _with_cache_hash(_normalize_openapi_note(note))
         note_id = note.get("note_id", note.get("id", "unknown"))
         title = note.get("title", "").strip()
 
-        # 缓存检查
-        if not self.force and self.cache.is_cached(note):
+        # 列表字段足够时先快速跳过；字段不足时继续拉详情后再判断。
+        if not self.force and self.cache.is_cached(note) and self._has_cached_markdown(note_id):
             self._print_status(note_id, title, "⏭ 缓存")
             self.stats["cached"] += 1
             return "cached"
 
         is_update = self.cache.get(note_id) is not None
+
+        detail = self.api_client.note_detail(note_id)
+        note = _with_cache_hash(_normalize_openapi_note({**note, **detail}))
+        title = note.get("title", "").strip()
+
+        # 详情字段完整后再次判断，避免重复写 Markdown 和下载附件。
+        if not self.force and self.cache.is_cached(note) and self._has_cached_markdown(note_id):
+            self._print_status(note_id, title, "⏭ 缓存")
+            self.stats["cached"] += 1
+            return "cached"
 
         # 生成文件夹名
         folder_name = self._make_folder_name(note)
@@ -199,6 +219,7 @@ class NoteDownloader:
         self.cache.update(note_id, {
             "version": note.get("version"),
             "updated_at": note.get("updated_at", ""),
+            "content_hash": note.get("content_hash", ""),
             "folder_name": folder_name,
             "title": title,
             "created_at": note.get("created_at", ""),
@@ -210,13 +231,22 @@ class NoteDownloader:
         self.stats["updated" if is_update else "new"] += 1
         return "updated" if is_update else "new"
 
+    def _has_cached_markdown(self, note_id: str) -> bool:
+        cached = self.cache.get(note_id)
+        if not cached:
+            return False
+        folder_name = cached.get("folder_name", "")
+        if not folder_name:
+            return False
+        return (self.output_dir / "notes" / folder_name / "note.md").exists()
+
     def _download_attachments(self, note: dict, attachments_dir: Path) -> bool:
         """下载笔记的附件（音频/图片），返回是否有附件"""
         has = False
 
-        # 音频附件
+        # 音频/文件附件
         for i, att in enumerate(note.get("attachments", [])):
-            att_url = att.get("url", "")
+            att_url = att.get("url", "") or att.get("play_url", "") or att.get("download_url", "")
             att_type = att.get("type", "")
             if att_url and att_type != "link":
                 has = True
@@ -365,3 +395,127 @@ class NoteDownloader:
                         else:
                             nid, title, created = "", folder.name, ""
                     f.write(f"| {i} | [{title}](notes/{folder.name}/note.md) | {created} | `{folder.name}` |\n")
+
+
+def _normalize_openapi_note(note: dict) -> dict:
+    """Normalize official OpenAPI note fields to the local Markdown shape."""
+    normalized = dict(note)
+    note_id = str(note.get("note_id") or note.get("id") or "")
+    if note_id:
+        normalized["note_id"] = note_id
+        normalized["id"] = note_id
+
+    normalized["created_at"] = _normalize_time_value(
+        note.get("created_at") or note.get("create_time") or note.get("created_time")
+    )
+    normalized["updated_at"] = _normalize_time_value(
+        note.get("updated_at") or note.get("update_time") or note.get("edit_time")
+    )
+    if "version" not in normalized and "timeline_version" in note:
+        normalized["version"] = note.get("timeline_version")
+
+    tags = []
+    for tag in note.get("tags", []) or []:
+        if isinstance(tag, str):
+            tags.append({"name": tag})
+        elif isinstance(tag, dict):
+            tags.append(tag)
+    normalized["tags"] = tags
+
+    topics = []
+    for topic in note.get("topics", []) or []:
+        if isinstance(topic, str):
+            topics.append({"topic_name": topic})
+        elif isinstance(topic, dict):
+            topic_name = topic.get("topic_name") or topic.get("name")
+            topics.append({**topic, "topic_name": topic_name or ""})
+    normalized["topics"] = topics
+
+    images = list(note.get("original_images") or note.get("image_urls") or [])
+    attachments = []
+    for att in note.get("attachments", []) or []:
+        if not isinstance(att, dict):
+            continue
+        att_type = (att.get("type") or att.get("attachment_type") or "").lower()
+        att_url = (
+            att.get("url")
+            or att.get("play_url")
+            or att.get("download_url")
+            or att.get("access_url")
+            or ""
+        )
+        if att_type == "image" and att_url:
+            images.append(att_url)
+            continue
+        normalized_att = dict(att)
+        normalized_att["type"] = att_type or "file"
+        normalized_att["url"] = att_url
+        duration = normalized_att.get("duration")
+        if isinstance(duration, (int, float)) and 0 < duration < 24 * 60 * 60:
+            normalized_att["duration"] = int(duration * 1000)
+        attachments.append(normalized_att)
+
+    audio = note.get("audio") or {}
+    if isinstance(audio, dict):
+        audio_url = audio.get("play_url") or audio.get("url")
+        if audio_url:
+            duration = audio.get("duration", 0)
+            if isinstance(duration, (int, float)) and 0 < duration < 24 * 60 * 60:
+                duration = int(duration * 1000)
+            attachments.append({
+                "type": "audio",
+                "url": audio_url,
+                "title": audio.get("title", "audio"),
+                "duration": duration,
+            })
+        if audio.get("original") and not normalized.get("ref_content"):
+            normalized["ref_content"] = audio["original"]
+
+    web_page = note.get("web_page") or {}
+    if isinstance(web_page, dict):
+        if web_page.get("content") and not normalized.get("ref_content"):
+            normalized["ref_content"] = web_page["content"]
+        if web_page.get("url"):
+            normalized["res_info"] = {
+                "title": web_page.get("title") or normalized.get("title", ""),
+                "url": web_page["url"],
+            }
+
+    normalized["attachments"] = attachments
+    normalized["original_images"] = images
+    return normalized
+
+
+def _with_cache_hash(note: dict) -> dict:
+    """Attach a stable hash over fields that affect local Markdown output."""
+    normalized = dict(note)
+    fingerprint = {
+        "title": normalized.get("title", ""),
+        "content": normalized.get("content", ""),
+        "ref_content": normalized.get("ref_content", ""),
+        "attachments": normalized.get("attachments", []),
+        "original_images": normalized.get("original_images", []),
+        "small_images": normalized.get("small_images", []),
+        "body_images": normalized.get("body_images", []),
+        "res_info": normalized.get("res_info", {}),
+        "topics": normalized.get("topics", []),
+        "tags": normalized.get("tags", []),
+        "note_type": normalized.get("note_type", ""),
+        "entry_type": normalized.get("entry_type", ""),
+    }
+    payload = json.dumps(fingerprint, ensure_ascii=False, sort_keys=True, default=str)
+    normalized["content_hash"] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return normalized
+
+
+def _normalize_time_value(value) -> str:
+    if value in (None, ""):
+        return ""
+    if isinstance(value, (int, float)):
+        if value > 10_000_000_000:
+            value = value / 1000
+        try:
+            return datetime.fromtimestamp(value).strftime("%Y-%m-%d %H:%M:%S")
+        except (OSError, OverflowError, ValueError):
+            return str(value)
+    return str(value)

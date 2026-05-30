@@ -6,32 +6,65 @@ from pathlib import Path
 # API 配置
 # ========================================================================
 
-# 笔记列表 API（原有功能）
-NOTES_API_URL = "https://get-notes.luojilab.com/voicenotes/web/notes"
+# 官方 OpenAPI
+OPENAPI_BASE_URL = "https://openapi.biji.com"
+
+OPENAPI_NOTE_SAVE_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/note/save"
+OPENAPI_NOTE_TASK_PROGRESS_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/note/task/progress"
+OPENAPI_NOTE_LIST_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/note/list"
+OPENAPI_NOTE_DETAIL_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/note/detail"
+OPENAPI_NOTE_UPDATE_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/note/update"
+OPENAPI_NOTE_DELETE_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/note/delete"
+OPENAPI_NOTE_SHARING_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/note/sharing"
+OPENAPI_IMAGE_UPLOAD_TOKEN_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/image/upload_token"
+OPENAPI_TAGS_ADD_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/note/tags/add"
+OPENAPI_TAGS_DELETE_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/note/tags/delete"
+OPENAPI_KNOWLEDGE_LIST_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/knowledge/list"
+OPENAPI_KNOWLEDGE_SUBSCRIBE_LIST_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/knowledge/subscribe/list"
+OPENAPI_KNOWLEDGE_CREATE_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/knowledge/create"
+OPENAPI_KNOWLEDGE_NOTES_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/knowledge/notes"
+OPENAPI_KNOWLEDGE_NOTE_ADD_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/knowledge/note/batch-add"
+OPENAPI_KNOWLEDGE_NOTE_REMOVE_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/knowledge/note/remove"
+OPENAPI_RECALL_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/recall"
+OPENAPI_KNOWLEDGE_RECALL_URL = f"{OPENAPI_BASE_URL}/open/api/v1/resource/recall/knowledge"
+
+# Legacy Web API（仅用于官方 OpenAPI 未覆盖的目录树/文件资源能力）
+LEGACY_NOTES_API_URL = "https://get-notes.luojilab.com/voicenotes/web/notes"
 
 # 知识库列表 API
-NOTEBOOKS_API_URL = "https://knowledge-api.trytalks.com/v1/web/topic/mine/list"
+LEGACY_NOTEBOOKS_API_URL = "https://knowledge-api.trytalks.com/v1/web/topic/mine/list"
 
 # 创建笔记 API
-NOTE_CREATE_API_URL = "https://get-notes.luojilab.com/voicenotes/web/notes"
+LEGACY_NOTE_CREATE_API_URL = "https://get-notes.luojilab.com/voicenotes/web/notes"
 
 # 通过链接创建笔记流式 API
-LINK_NOTE_CREATE_API_URL = "https://get-notes.luojilab.com/voicenotes/web/notes/stream"
+LEGACY_LINK_NOTE_CREATE_API_URL = "https://get-notes.luojilab.com/voicenotes/web/notes/stream"
 
 # 搜索笔记 API
-SEARCH_API_URL = "https://get-notes.luojilab.com/voicenotes/web/notes/search"
+LEGACY_SEARCH_API_URL = "https://get-notes.luojilab.com/voicenotes/web/notes/search"
 
 # 获取图片上传 Token API
-IMAGE_TOKEN_API_URL = "https://get-notes.luojilab.com/voicenotes/web/token/image"
+LEGACY_IMAGE_TOKEN_API_URL = "https://get-notes.luojilab.com/voicenotes/web/token/image"
 
 # 订阅知识库列表 API
-SUBSCRIBE_NOTEBOOKS_API_URL = "https://knowledge-api.trytalks.com/v1/web/subscribe/topic/list"
+LEGACY_SUBSCRIBE_NOTEBOOKS_API_URL = "https://knowledge-api.trytalks.com/v1/web/subscribe/topic/list"
 
 # 知识库资源列表 API（笔记本功能）
-KNOWLEDGE_API_URL = "https://knowledge-api.trytalks.com/v1/web/topic/resource/list/mix"
+LEGACY_KNOWLEDGE_API_URL = "https://knowledge-api.trytalks.com/v1/web/topic/resource/list/mix"
 
 # 笔记加入知识库 API
-ADD_TO_NOTEBOOK_API_URL = "https://get-notes.luojilab.com/voicenotes/web/topics/import/notes"
+LEGACY_ADD_TO_NOTEBOOK_API_URL = "https://get-notes.luojilab.com/voicenotes/web/topics/import/notes"
+
+# Backward-compatible aliases used by older modules/tests.
+NOTES_API_URL = LEGACY_NOTES_API_URL
+NOTEBOOKS_API_URL = LEGACY_NOTEBOOKS_API_URL
+NOTE_CREATE_API_URL = LEGACY_NOTE_CREATE_API_URL
+LINK_NOTE_CREATE_API_URL = LEGACY_LINK_NOTE_CREATE_API_URL
+SEARCH_API_URL = LEGACY_SEARCH_API_URL
+IMAGE_TOKEN_API_URL = LEGACY_IMAGE_TOKEN_API_URL
+SUBSCRIBE_NOTEBOOKS_API_URL = LEGACY_SUBSCRIBE_NOTEBOOKS_API_URL
+KNOWLEDGE_API_URL = LEGACY_KNOWLEDGE_API_URL
+ADD_TO_NOTEBOOK_API_URL = LEGACY_ADD_TO_NOTEBOOK_API_URL
 
 # 得到笔记登录页
 LOGIN_URL = "https://www.biji.com"
@@ -65,6 +98,9 @@ CONFIG_DIR = Path.home() / ".getnotes-cli"
 
 # Auth token 缓存文件
 AUTH_CACHE_FILE = CONFIG_DIR / "auth.json"
+
+# Legacy Bearer token 缓存文件（仅用于 download-tree 等 legacy-only 能力）
+LEGACY_AUTH_CACHE_FILE = CONFIG_DIR / "legacy_auth.json"
 
 # Chrome profile 目录（CDP 用）
 CHROME_PROFILE_DIR = CONFIG_DIR / "chrome-profile"

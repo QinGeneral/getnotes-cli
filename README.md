@@ -2,7 +2,7 @@
 
 [中文](README.md) | [English](README_EN.md)
 
-Get笔记 Cli 下载工具和 MCP 集成，支持自动登录、批量下载、知识库管理、笔记搜索、Markdown 导出、录音图片等附件下载。
+Get笔记 Cli 下载工具和 MCP 集成，基于官方 OpenAPI 支持批量下载、知识库管理、语义搜索、Markdown 导出、录音图片等附件下载。
 
 > **初衷与设计理念：**
 > - 🤖 **Agent 工作流**：提供标准化的 CLI 和 MCP 接入，便于无缝嵌入到各类大模型 Agent 或自动化流程中，充当高质量的个人知识上下文。
@@ -13,10 +13,10 @@ Get笔记 Cli 下载工具和 MCP 集成，支持自动登录、批量下载、�
 
 ## ✨ 功能
 
-- 🔐 **自动登录** — 通过 Chrome DevTools Protocol 自动获取 Bearer token，无需手动抓包
+- 🔐 **官方 OpenAPI 鉴权** — 使用 API Key + Client ID，适合本地、服务器和 Agent 工作流
 - 📥 **批量下载** — 分页拉取全部笔记，支持指定数量
 - 📤 **新建笔记** — 支持通过本地 Markdown 或文本文件创建笔记，并支持自动上传内嵌图片
-- 🔍 **笔记搜索** — 根据关键词搜索笔记，支持分页浏览
+- 🔍 **语义搜索** — 使用官方 OpenAPI recall 接口召回相关笔记
 - 📚 **知识库管理** — 查看、下载我的知识库与订阅知识库
 - 📝 **Markdown 导出** — 每条笔记保存为 Markdown，包含元信息、标签、正文、引用内容
 - 🔊 **附件下载** — 自动下载音频、图片附件，并在 Markdown 中内嵌链接
@@ -59,7 +59,7 @@ Get笔记 CLI 提供原生的 [Model Context Protocol (MCP)](https://modelcontex
 - `download_notes(limit=10)`: 下载近期笔记为 Markdown 文件。
 - `create_note(content)`: 直接提交文本建立新笔记。
 - `create_link_note(url)`: 通过 AI 解析链接创建深度笔记。
-- `search_notes(query)`: 根据关键词搜索笔记并返回匹配结果（含全文内容）。
+- `search_notes(query)`: 使用官方语义搜索返回相关笔记。
 - `read_note(note_id)`: 通过笔记 ID 读取笔记全文 Markdown 内容。
 - `list_notebooks()`: 获取你创建的知识库列表及对应 ID。
 - `download_notebook(notebook_id)`: 下载指定的知识库内容。
@@ -95,12 +95,15 @@ pip install -e .
 ### 登录
 
 ```bash
-# 自动浏览器登录（推荐）
-# 会打开 Chrome，导航到得到笔记页面，登录后自动捕获 token
-getnotes login
+# 配置官方 OpenAPI 凭证（推荐）
+getnotes login --api-key "gk_live_xxx" --client-id "cli_xxx"
 
-# 手动输入 token（跳过浏览器）
-getnotes login --token "Bearer eyJhbGci..."
+# 或使用环境变量
+export GETNOTE_API_KEY="gk_live_xxx"
+export GETNOTE_CLIENT_ID="cli_xxx"
+
+# legacy token 仅用于 download-tree 等官方 OpenAPI 未覆盖的能力
+getnotes login --legacy-token "Bearer eyJhbGci..."
 ```
 
 ### 新建笔记
@@ -122,14 +125,11 @@ getnotes create-link <url>
 ### 搜索笔记
 
 ```bash
-# 根据关键词搜索笔记
+# 使用官方语义搜索笔记
 getnotes search "AI 提效"
 
-# 查看第 2 页结果
-getnotes search "AI 提效" --page 2
-
-# 自定义每页数量
-getnotes search "AI 提效" --page-size 20
+# 自定义召回数量（官方最大 10）
+getnotes search "AI 提效" --page-size 10
 ```
 
 ### 下载笔记
@@ -162,8 +162,8 @@ getnotes download --force
 # 组合使用
 getnotes download --all --save-json --delay 1.0
 
-# 直接传 token 下载（一步到位，跳过登录缓存）
-getnotes download --token "Bearer eyJhbGci..." --limit 20
+# 直接传 API Key 下载（Client ID 仍从配置或环境读取）
+getnotes download --api-key "gk_live_xxx" --limit 20
 ```
 
 ### 知识库管理
@@ -180,6 +180,12 @@ getnotes notebook download --id abc123
 
 # 下载全部知识库
 getnotes notebook download-all
+
+# 创建知识库
+getnotes notebook create "读书笔记" --description "读书摘录和想法"
+
+# 下载官方 OpenAPI 未覆盖的目录树与文件资源（legacy）
+getnotes notebook download-tree --name "读书笔记"
 
 # 带选项下载
 getnotes notebook download --name "读书" --save-json --delay 1.0
@@ -201,6 +207,9 @@ getnotes subscribe download --id xyz789
 # 下载全部订阅知识库
 getnotes subscribe download-all
 
+# 下载订阅知识库目录树与文件资源（legacy）
+getnotes subscribe download-tree --name "某知识库"
+
 # 带选项下载
 getnotes subscribe download --name "某知识库" --save-json --force
 getnotes subscribe download-all --delay 1.0 --output ~/Desktop/subscribed
@@ -214,7 +223,22 @@ getnotes notebook add-note --note-id <笔记ID> --name "读书笔记"
 
 # 按知识库 ID 精确指定
 getnotes notebook add-note --note-id <笔记ID> --id abc123
+
+# 从知识库移除笔记
+getnotes notebook remove-note --note-id <笔记ID> --id abc123
 ```
+
+## 🧭 能力边界
+
+| 能力 | 后端 |
+|------|------|
+| 文本/链接/图片笔记创建 | 官方 OpenAPI |
+| 笔记列表、详情、更新、删除、分享 | 官方 OpenAPI |
+| 搜索 | 官方 OpenAPI 语义搜索 |
+| 我的知识库/订阅知识库列表、创建、笔记列表、加/移笔记 | 官方 OpenAPI |
+| Markdown、附件落盘、缓存、索引、HTML/PDF 导出 | 本地逻辑 |
+| 知识库目录树递归下载、知识库文件资源下载 | legacy 专用命令 `download-tree` |
+| 创建本地音频/视频笔记 | 暂不支持 |
 
 ### 导出为 HTML
 
@@ -323,12 +347,12 @@ getnotes_export/
 
 > 默认不会创建 `api_responses/` 目录和 `note.json` 文件。使用 `--save-json` 选项时才会保存这些技术文件。
 
-## 🔐 Token 管理
+## 🔐 凭证管理
 
-- Token 通过 CDP（Chrome DevTools Protocol）自动获取
-- 缓存在 `~/.getnotes-cli/auth.json`
-- 得到 Token 约 30 分钟有效，过期后自动提示重新登录
-- 也支持 `--token` 参数手动传入
+- OpenAPI API Key / Client ID 缓存在 `~/.getnotes-cli/auth.json`
+- 也支持 `GETNOTE_API_KEY` / `GETNOTE_CLIENT_ID` 环境变量
+- Legacy Bearer token 只用于 `download-tree`，缓存在 `~/.getnotes-cli/legacy_auth.json`
+- 官方 API 支持的能力不会自动 fallback 到 legacy API
 
 ## ⚙️ 配置文件
 
@@ -344,7 +368,7 @@ getnotes_export/
 
 ## ⚠️ 注意事项
 
-- 首次使用请先运行 `getnotes login` 登录
+- 首次使用请先运行 `getnotes login --api-key <key> --client-id <id>` 配置官方凭证
 - 附件 URL 中的签名有过期时间，建议一次性下载完成
 - 已下载的附件不会重复下载（自动跳过）
 - 默认下载前 100 条用于调试，确认无误后使用 `--all` 下载全部

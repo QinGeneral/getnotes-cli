@@ -5,11 +5,13 @@ import tempfile
 from pathlib import Path
 
 from getnotes_cli.auth import get_or_refresh_token
-from getnotes_cli.config import DEFAULT_OUTPUT_DIR, NOTES_API_URL
+from getnotes_cli.config import DEFAULT_OUTPUT_DIR
 from getnotes_cli.creator import NoteCreator
 from getnotes_cli.downloader import NoteDownloader
+from getnotes_cli.downloader import _normalize_openapi_note
+from getnotes_cli.markdown import note_to_markdown
+from getnotes_cli.openapi_client import OpenAPIClient
 from getnotes_cli.searcher import NoteSearcher
-import httpx
 
 # We will export the functions that should be registered
 __all__ = ["download_notes", "create_note", "create_link_note", "search_notes", "read_note", "get_recent_notes"]
@@ -70,19 +72,18 @@ def get_recent_notes(limit: int = 10) -> str:
         return f"Error: Authentication failed. Please run 'getnotes login' in your terminal. ({e})"
         
     try:
-        params = {
-            "limit": limit,
-            "since_id": "",
-            "sort": "create_desc",
-        }
-        headers = auth.get_headers()
-        with httpx.Client(timeout=30) as client:
-            resp = client.get(NOTES_API_URL, headers=headers, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-            
-        content = data.get("c", {})
-        notes_list = content.get("list", [])
+        notes_list = []
+        cursor = ""
+        with OpenAPIClient(auth, min_interval=1.0) as client:
+            while len(notes_list) < limit:
+                data = client.list_notes(cursor)
+                notes_list.extend(data.get("notes", []) or [])
+                if not data.get("has_more"):
+                    break
+                cursor = data.get("cursor", "")
+                if not cursor:
+                    break
+        notes_list = notes_list[:limit]
         
         notes = []
         for item in notes_list:
@@ -95,9 +96,9 @@ def get_recent_notes(limit: int = 10) -> str:
             
             # Clean tags
             tags = [
-                t.get("name", "")
+                t if isinstance(t, str) else t.get("name", "")
                 for t in item.get("tags", [])
-                if t.get("type") != "system"
+                if isinstance(t, str) or t.get("type") != "system"
             ]
             
             note_data = {
@@ -156,15 +157,10 @@ def create_link_note(url: str) -> str:
     creator = NoteCreator(auth)
     
     try:
-        output_lines = []
         note_id = None
         
-        events = creator.create_note_from_link(url)
-        for data in events:
-            msg_type = data.get("msg_type")
-            inner_data = data.get("data", {})
-            if msg_type == -1 and "note_id" in inner_data:
-                note_id = inner_data["note_id"]
+        data = creator.create_note_from_link(url)
+        note_id = data.get("note_id")
         
         if note_id:
             return f"Successfully created AI note from link!\nNote ID: {note_id}"
@@ -225,9 +221,9 @@ def search_notes(query: str, page: int = 1, page_size: int = 10) -> str:
         
         # Clean tags (filter out system tags)
         tags = [
-            NoteSearcher.strip_highlight(t.get("name", ""))
+            NoteSearcher.strip_highlight(t if isinstance(t, str) else t.get("name", ""))
             for t in item.get("tags", [])
-            if t.get("type") != "system"
+            if isinstance(t, str) or t.get("type") != "system"
         ]
         
         note_data = {
@@ -279,41 +275,15 @@ def read_note(note_id: str) -> str:
             if md_file.exists():
                 return md_file.read_text(encoding="utf-8")
 
-    # 未在本地找到，尝试通过搜索 API 获取内容
+    # 未在本地找到，尝试通过官方详情 API 获取内容
     try:
         auth = get_or_refresh_token()
     except Exception as e:
         return f"Error: Authentication failed. Please run 'getnotes login'. ({e})"
 
-    from getnotes_cli.searcher import NoteSearcher
-    searcher = NoteSearcher(auth)
-
     try:
-        result = searcher.search(note_id, page=1, page_size=5)
-        for item in result.get("items", []):
-            if item.get("note_id") == note_id:
-                title = NoteSearcher.strip_highlight(item.get("title", "")).strip()
-                content = NoteSearcher.strip_highlight(item.get("content", "")).strip()
-                ref_content = NoteSearcher.strip_highlight(item.get("ref_content", "")).strip()
-                tags = [
-                    NoteSearcher.strip_highlight(t.get("name", ""))
-                    for t in item.get("tags", []) if t.get("type") != "system"
-                ]
-                parts = []
-                if title:
-                    parts.append(f"# {title}\n")
-                parts.append(f"**ID**: `{note_id}`")
-                parts.append(f"**创建时间**: {item.get('created_at', '')}")
-                if tags:
-                    parts.append(f"**标签**: {', '.join(tags)}")
-                if content:
-                    parts.append(f"\n## 内容\n\n{content}")
-                if ref_content:
-                    parts.append(f"\n## 引用内容\n\n> {ref_content}")
-                return "\n\n".join(parts)
-        return (
-            f"Note with ID '{note_id}' not found locally or via search.\n"
-            f"Try running: getnotes download  to sync notes first."
-        )
+        with OpenAPIClient(auth) as client:
+            note = _normalize_openapi_note(client.note_detail(note_id))
+        return note_to_markdown(note, DEFAULT_OUTPUT_DIR / "attachments", DEFAULT_OUTPUT_DIR)
     except Exception as e:
         return f"Error reading note: {e}"

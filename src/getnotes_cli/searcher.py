@@ -2,10 +2,8 @@
 
 import re
 
-import httpx
-
 from getnotes_cli.auth import AuthToken
-from getnotes_cli.config import SEARCH_API_URL
+from getnotes_cli.openapi_client import OpenAPIClient
 
 
 class NoteSearcher:
@@ -13,7 +11,6 @@ class NoteSearcher:
 
     def __init__(self, token: AuthToken):
         self.token = token
-        self.client = httpx.Client(timeout=30)
 
     def search(
         self,
@@ -21,36 +18,24 @@ class NoteSearcher:
         page: int = 1,
         page_size: int = 10,
     ) -> dict:
-        """搜索笔记
+        """语义搜索笔记（官方 OpenAPI recall）。
 
         Args:
             query: 搜索关键词
-            page: 页码（从 1 开始）
-            page_size: 每页数量
+            page: 兼容参数；官方语义搜索不分页
+            page_size: 映射为 top_k（最大 10）
 
         Returns:
             包含 items, total, has_more 的字典
         """
-        params = {
-            "page": page,
-            "page_size": page_size,
-            "query": query,
-        }
-        headers = self.token.get_headers()
-        resp = self.client.get(
-            SEARCH_API_URL,
-            headers=headers,
-            params=params,
-            timeout=30,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        content = data.get("c", {})
+        with OpenAPIClient(self.token) as client:
+            items = client.recall(query, top_k=page_size)
         return {
-            "items": content.get("items", []),
-            "total": content.get("total", 0),
-            "has_more": content.get("has_more", False),
+            "items": items,
+            "total": len(items),
+            "has_more": False,
+            "page": 1,
+            "semantic": True,
         }
 
     @staticmethod

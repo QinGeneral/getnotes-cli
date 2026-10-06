@@ -16,6 +16,7 @@ CLI tool and MCP integration for [Get Notes (获取笔记)](https://luojilab.com
 - 🔐 **Auto-login** — Captures Bearer token via Chrome DevTools Protocol; no manual packet sniffing required
 - 📥 **Batch download** — Paginated fetch of all notes with configurable limits
 - 📤 **Create notes** — Create notes from local Markdown/text files with automatic image upload
+- 🗑️ **Delete notes** — Delete a cloud note by ID, with confirmation or a flag for automation
 - 🔍 **Search** — Keyword search with paginated results
 - 📚 **Notebook management** — List and download personal and subscribed notebooks
 - 📝 **Markdown export** — Each note saved as Markdown with metadata, tags, body, and quoted content
@@ -120,6 +121,22 @@ getnotes create -f my_note.md -i img1.png -i img2.jpg
 # Create a note from a URL (AI analyzes and generates a deep note)
 getnotes create-link <url>
 ```
+
+### Delete Notes
+
+```bash
+# Delete a cloud note by ID (prompts for confirmation)
+getnotes delete <note_id>
+
+# Skip confirmation for scripts or agents
+getnotes delete <note_id> --confirm
+getnotes delete <note_id> -y
+
+# Pass an OpenAPI API Key (Client ID comes from configuration or environment)
+getnotes delete <note_id> --api-key "gk_live_xxx" -y
+```
+
+This command deletes the cloud note and retains downloaded local files and cache entries.
 
 ### Search Notes
 

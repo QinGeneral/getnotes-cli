@@ -149,6 +149,45 @@ def create_link(
 
 
 # ========================================================================
+# delete 命令
+# ========================================================================
+
+
+@app.command()
+def delete(
+    note_id: str = typer.Argument(..., help="要删除的笔记 ID"),
+    confirm: bool = typer.Option(
+        False, "--confirm", "-y",
+        help="跳过确认提示",
+    ),
+    token: Optional[str] = typer.Option(
+        None, "--api-key", "--token", "-t",
+        help="直接传入 OpenAPI API Key（Client ID 仍从配置或环境读取）",
+    ),
+) -> None:
+    """🗑️ 删除云端笔记 — 按笔记 ID 删除"""
+    from getnotes_cli.openapi_client import OpenAPIClient
+
+    note_id = note_id.strip()
+    if not note_id:
+        raise typer.BadParameter("笔记 ID 不能为空", param_hint="note_id")
+
+    if not confirm:
+        typer.confirm(f"确认删除云端笔记 '{note_id}'？", abort=True)
+
+    auth = _get_auth(token)
+    try:
+        with OpenAPIClient(auth) as client:
+            client.delete_note(note_id)
+    except Exception as e:
+        console.print(f"[red]✗[/red] 删除失败: {e}")
+        raise typer.Exit(1)
+
+    console.print("[green]✓[/green] 云端笔记已删除。")
+    console.print(f"  ID: {note_id}", markup=False)
+
+
+# ========================================================================
 # search 命令
 # ========================================================================
 

@@ -16,6 +16,7 @@ Get笔记 Cli 下载工具和 MCP 集成，基于官方 OpenAPI 支持批量下�
 - 🔐 **官方 OpenAPI 鉴权** — 使用 API Key + Client ID，适合本地、服务器和 Agent 工作流
 - 📥 **批量下载** — 分页拉取全部笔记，支持指定数量
 - 📤 **新建笔记** — 支持通过本地 Markdown 或文本文件创建笔记，并支持自动上传内嵌图片
+- 🗑️ **删除笔记** — 按笔记 ID 删除云端笔记，支持交互确认与自动化调用
 - 🔍 **语义搜索** — 使用官方 OpenAPI recall 接口召回相关笔记
 - 📚 **知识库管理** — 查看、下载我的知识库与订阅知识库
 - 📝 **Markdown 导出** — 每条笔记保存为 Markdown，包含元信息、标签、正文、引用内容
@@ -121,6 +122,22 @@ getnotes create -f my_note.md -i img1.png -i img2.jpg
 # 通过链接创建笔记（AI 自动分析并生成深度笔记）
 getnotes create-link <url>
 ```
+
+### 删除笔记
+
+```bash
+# 按笔记 ID 删除云端笔记（执行前提示确认）
+getnotes delete <笔记ID>
+
+# 跳过确认，适用于脚本或 Agent 调用
+getnotes delete <笔记ID> --confirm
+getnotes delete <笔记ID> -y
+
+# 直接传入 API Key（Client ID 仍从配置或环境读取）
+getnotes delete <笔记ID> --api-key "gk_live_xxx" -y
+```
+
+此命令删除云端笔记，保留本地已下载的文件与缓存。
 
 ### 搜索笔记
 

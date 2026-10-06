@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "getnotes-cli"
-version = "0.2.2"
+version = "0.2.3"
 description = "Get 笔记 CLI 下载工具 — 自动登录、批量下载、Markdown 导出、知识库管理、MCP 集成"
 readme = "README.md"
 license = {text = "MIT"}
@@ -29,6 +29,10 @@ dependencies = [
 getnotes = "getnotes_cli.cli:main"
 getnotes-mcp = "getnotes_cli.mcp.server:main"
 
+[project.urls]
+Repository = "https://github.com/QinGeneral/getnotes-cli"
+Issues = "https://github.com/QinGeneral/getnotes-cli/issues"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
@@ -36,6 +40,18 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/getnotes_cli"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/README.md",
+    "/README_EN.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
+    "/pyproject.toml",
+    "/uv.lock",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -5,6 +5,15 @@
 此文件的格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并且本项目遵循 [语义化版本规范 (Semantic Versioning)](https://semver.org/spec/v2.0.0.html)。
 
+## [0.2.3] - 2026-10-06
+
+### 新增 (Added)
+- **删除笔记**：新增 `getnotes delete <笔记ID>` 命令，通过官方 OpenAPI 删除云端笔记；默认提示确认，支持 `--confirm` / `-y` 跳过确认。
+
+### 变更 (Changed)
+- **官方 OpenAPI**：笔记创建、搜索、下载和知识库管理改用 API Key + Client ID 认证；目录树下载保留 legacy token 支持。
+- **发布包范围**：源码包仅收录源码、测试、用户文档和构建配置，排除本地抓包记录与开发流程文件。
+
 ## [0.2.2] - 2026-03-01
 
 ### 新增 (Added)
